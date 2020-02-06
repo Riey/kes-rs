@@ -197,7 +197,11 @@ impl<'s> Iterator for Lexer<'s> {
         }
 
         if let Some(ident) = self.try_read_ident() {
-            return Some(Token::IntLit(ident.parse().unwrap()));
+            if let b'0'..=b'9' = ident.as_bytes()[0] {
+                return Some(Token::IntLit(ident.parse().unwrap()));
+            } else {
+                return Some(Token::Builtin(ident));
+            }
         }
 
         match self.pop_char()? {
@@ -206,7 +210,6 @@ impl<'s> Iterator for Lexer<'s> {
                 Some(Token::StrLit(lit, postfix))
             }
             '$' => Some(Token::Variable(self.read_ident())),
-            '@' => Some(Token::Builtin(self.read_ident())),
             ',' => Some(Token::Comma),
             '(' => Some(Token::OpenParen),
             ')' => Some(Token::CloseParen),
