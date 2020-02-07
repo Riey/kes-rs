@@ -14,6 +14,7 @@ pub enum Instruction<'s> {
     Goto(usize),
     GotoIfNot(usize),
     EndBlock,
+    Duplicate,
 }
 
 #[derive(Clone, Copy)]
@@ -243,6 +244,63 @@ fn parse_if_else_test() {
             Instruction::PrintL,
             Instruction::Goto(23),
             Instruction::PushStr("1은 2와 같다"),
+            Instruction::PrintL,
+            Instruction::PushStr("foo"),
+            Instruction::PrintL,
+        ]
+    );
+}
+
+#[test]
+fn parse_select() {
+    use crate::lexer::lex;
+    use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
+
+    let instructions = parse(lex("
+선택 1 2 + {
+    3 {
+        '3'@
+    }
+    2 {
+        '2'@
+    }
+    1 {
+        '1'@
+    }
+    그외 {
+        'other'@
+    }
+}
+'foo'@
+"));
+
+    assert_eq!(
+        &instructions,
+        &[
+            Instruction::PushInt(1),
+            Instruction::PushInt(2),
+            Instruction::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
+            Instruction::Duplicate,
+            Instruction::PushInt(3),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::GotoIfNot(10),
+            Instruction::PushStr("3"),
+            Instruction::PrintL,
+            Instruction::Goto(16),
+            Instruction::Duplicate,
+            Instruction::PushInt(2),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::GotoIfNot(19),
+            Instruction::PushStr("2"),
+            Instruction::PrintL,
+            Instruction::Goto(22),
+            Instruction::PushInt(1),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::GotoIfNot(23),
+            Instruction::PushStr("1"),
+            Instruction::PrintL,
+            Instruction::Goto(25),
+            Instruction::PushStr("other"),
             Instruction::PrintL,
             Instruction::PushStr("foo"),
             Instruction::PrintL,
