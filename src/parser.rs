@@ -1,4 +1,4 @@
-use crate::token::{OperatorToken, Token};
+use crate::token::{BooleanOperatorToken, OperatorToken, Token};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Instruction<'s> {
@@ -23,8 +23,9 @@ enum State {
     If(usize),
     Else(usize),
     ElseIf(usize, usize),
-    Select(usize),
-    Arm(usize, usize),
+    Select,
+    SelectElse(usize),
+    SelectArm(usize, usize),
 }
 
 struct Parser<'s, I: Iterator<Item = Token<'s>>> {
@@ -69,6 +70,38 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
         self.ret.len()
     }
 
+    fn move_next_open_brace(&mut self) {
+        loop {
+            match self.tokens.next().unwrap() {
+                Token::OpenBrace => {
+                    break;
+                }
+                token => self.step(token),
+            }
+        }
+    }
+
+    fn read_select_arm(&mut self, prev_end: usize) {
+        self.backup_state();
+        match self.tokens.next().unwrap() {
+            token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
+                self.push(Instruction::Duplicate);
+                self.step(token);
+                self.push(Instruction::Operator(OperatorToken::Boolean(
+                    BooleanOperatorToken::Equal,
+                )));
+                self.set_state(State::SelectArm(prev_end, self.ret.len()));
+                self.push(Instruction::Nop);
+            }
+            Token::Else => {
+                self.set_state(State::SelectElse(self.ret.len() - 1));
+            }
+            token => panic!("Unexpected token {:?}", token),
+        }
+
+        assert_eq!(self.tokens.next(), Some(Token::OpenBrace));
+    }
+
     fn step(&mut self, token: Token<'s>) {
         match token {
             Token::IntLit(num) => self.push(Instruction::PushInt(num)),
@@ -78,12 +111,17 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
             Token::Colon => self.push(Instruction::Print),
             Token::At => self.push(Instruction::PrintL),
             Token::Sharp => self.push(Instruction::PrintW),
+            Token::Select => {
+                self.backup_state();
+                self.set_state(State::Select);
+                self.move_next_open_brace();
+                self.read_select_arm(0);
+            }
             Token::OpenBrace => {
                 let pos = self.next_pos();
 
                 match self.state {
-                    State::Select(..) => todo!(),
-                    State::Arm(..) => todo!(),
+                    State::Select => unreachable!(),
                     _ => {
                         self.backup_state();
                         self.push(Instruction::Nop);
@@ -94,11 +132,27 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
             Token::CloseBrace => {
                 let pos = self.next_pos();
                 match self.state {
-                    State::Empty => panic!("Unexpected block close"),
+                    State::Empty => panic!("Unexpected block close, {:?}", self.ret),
                     State::ElseIf(if_end, top) => {
                         self.ret[if_end] = Instruction::Goto(pos + 1);
                         self.set_state(State::If(top));
                         self.step(Token::CloseBrace);
+                    }
+                    State::Select => {
+                        self.restore_state();
+                    }
+                    State::SelectArm(prev_end, top) => {
+                        self.restore_state();
+                        self.ret[top] = Instruction::GotoIfNot(pos + 1);
+                        self.push(Instruction::Nop);
+                        if prev_end != 0 {
+                            self.ret[prev_end] = Instruction::Goto(pos);
+                        }
+                        self.read_select_arm(pos);
+                    }
+                    State::SelectElse(top) => {
+                        self.restore_state();
+                        self.ret[top] = Instruction::Goto(pos);
                     }
                     State::If(top) => {
                         match self.tokens.next() {
@@ -115,20 +169,9 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
                                         self.ret[top] = Instruction::GotoIfNot(pos + 1);
                                         self.push(Instruction::Nop);
                                         self.step(token);
-
-                                        loop {
-                                            match self.tokens.next().unwrap() {
-                                                Token::OpenBrace => {
-                                                    self.set_state(State::ElseIf(
-                                                        pos,
-                                                        self.ret.len(),
-                                                    ));
-                                                    self.push(Instruction::Nop);
-                                                    break;
-                                                }
-                                                token => self.step(token),
-                                            }
-                                        }
+                                        self.move_next_open_brace();
+                                        self.set_state(State::ElseIf(pos, self.ret.len()));
+                                        self.push(Instruction::Nop);
                                     }
                                 }
                             }
@@ -252,9 +295,34 @@ fn parse_if_else_test() {
 }
 
 #[test]
+fn parse_select_else() {
+    
+    use crate::lexer::lex;
+    use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
+    use pretty_assertions::assert_eq;
+
+    let instructions = parse(lex("
+선택 1 {
+    그외 {
+        ''@
+    }
+}
+''@
+"));
+
+    assert_eq!(instructions, &[
+        Instruction::Goto(3),
+        Instruction::PushInt(1),
+    ]);
+
+
+}
+
+#[test]
 fn parse_select() {
     use crate::lexer::lex;
     use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
+    use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
 선택 1 2 + {
@@ -290,16 +358,17 @@ fn parse_select() {
             Instruction::Duplicate,
             Instruction::PushInt(2),
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
-            Instruction::GotoIfNot(19),
+            Instruction::GotoIfNot(17),
             Instruction::PushStr("2"),
             Instruction::PrintL,
-            Instruction::Goto(22),
+            Instruction::Goto(23),
+            Instruction::Duplicate,
             Instruction::PushInt(1),
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
-            Instruction::GotoIfNot(23),
+            Instruction::GotoIfNot(24),
             Instruction::PushStr("1"),
             Instruction::PrintL,
-            Instruction::Goto(25),
+            Instruction::Goto(26),
             Instruction::PushStr("other"),
             Instruction::PrintL,
             Instruction::PushStr("foo"),
