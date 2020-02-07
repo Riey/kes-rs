@@ -32,6 +32,15 @@ pub enum BooleanOperatorToken {
     Greater,
     /// >=
     GreaterOrEqual,
+    /// ~
+    Not,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OperatorToken {
+    Simple(SimpleOperatorToken),
+    Boolean(BooleanOperatorToken),
+    Assign(Option<SimpleOperatorToken>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,17 +53,17 @@ pub enum Token<'s> {
     IntLit(u32),
     Builtin(&'s str),
     Variable(&'s str),
-    /// ~
-    Not,
-    SimpleOperator(SimpleOperatorToken),
-    BooleanOperator(BooleanOperatorToken),
-    AssignOperator(Option<SimpleOperatorToken>),
+    Operator(OperatorToken),
     /// {
     OpenBrace,
     /// }
     CloseBrace,
     /// ?
     Question,
+    /// :
+    Colon,
     /// #
     Sharp,
+    /// @
+    At,
 }

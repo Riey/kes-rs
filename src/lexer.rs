@@ -1,4 +1,4 @@
-use crate::token::{BooleanOperatorToken, SimpleOperatorToken, Token};
+use crate::token::{BooleanOperatorToken, OperatorToken, SimpleOperatorToken, Token};
 
 fn is_ident_char(c: char) -> bool {
     matches!(c, '0'..='9' | 'ㄱ'..='ㅎ' | 'ㅏ'..='ㅣ' | '가'..='힣')
@@ -117,6 +117,8 @@ impl<'s> Lexer<'s> {
             Some(BooleanOperatorToken::Greater)
         } else if self.try_match_pop_char('<') {
             Some(BooleanOperatorToken::Less)
+        } else if self.try_match_pop_char('~') {
+            Some(BooleanOperatorToken::Not)
         } else {
             None
         }
@@ -144,17 +146,17 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_operator(&mut self) -> Option<Token<'static>> {
-        if let Some(boolean_op) = self.try_read_boolean_operator() {
-            Some(Token::BooleanOperator(boolean_op))
+    fn try_read_operator(&mut self) -> Option<OperatorToken> {
+        if let Some(op) = self.try_read_boolean_operator() {
+            Some(OperatorToken::Boolean(op))
         } else if let Some(op) = self.try_read_simple_operator() {
             if self.try_match_pop_char('=') {
-                Some(Token::AssignOperator(Some(op)))
+                Some(OperatorToken::Assign(Some(op)))
             } else {
-                Some(Token::SimpleOperator(op))
+                Some(OperatorToken::Simple(op))
             }
         } else if self.try_match_pop_char('=') {
-            Some(Token::AssignOperator(None))
+            Some(OperatorToken::Assign(None))
         } else {
             None
         }
@@ -171,8 +173,8 @@ impl<'s> Iterator for Lexer<'s> {
             return token;
         }
 
-        if let token @ Some(_) = self.try_read_operator() {
-            return token;
+        if let Some(op) = self.try_read_operator() {
+            return Some(Token::Operator(op));
         }
 
         if let Some(ident) = self.try_read_ident() {
@@ -190,7 +192,8 @@ impl<'s> Iterator for Lexer<'s> {
             '}' => Some(Token::CloseBrace),
             '?' => Some(Token::Question),
             '#' => Some(Token::Sharp),
-            '~' => Some(Token::Not),
+            ':' => Some(Token::Colon),
+            '@' => Some(Token::At),
             ch => panic!("Unexpected char {}", ch),
         }
     }
@@ -208,15 +211,20 @@ fn lex_test() {
     assert_eq!(ts.next().unwrap(), Token::Sharp,);
     assert!(ts.text().is_empty());
 
+    ts = lex("'ABC' @");
+    assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
+    assert_eq!(ts.next().unwrap(), Token::At,);
+    assert!(ts.text().is_empty());
+
     ts = lex("+=+");
 
     assert_eq!(
         ts.next().unwrap(),
-        Token::AssignOperator(Some(SimpleOperatorToken::Add))
+        Token::Operator(OperatorToken::Assign(Some(SimpleOperatorToken::Add)))
     );
     assert_eq!(
         ts.next().unwrap(),
-        Token::SimpleOperator(SimpleOperatorToken::Add)
+        Token::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
     );
     assert!(ts.text().is_empty());
 }

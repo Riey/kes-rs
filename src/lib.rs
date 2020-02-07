@@ -2,6 +2,7 @@
 
 mod ast;
 mod lexer;
+mod parser;
 mod token;
 
 use std::collections::BTreeMap;
