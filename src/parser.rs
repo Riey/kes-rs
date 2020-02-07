@@ -20,8 +20,8 @@ pub enum Instruction<'s> {
 enum State {
     Empty,
     If(usize),
-    ElseIf(usize),
     Else(usize),
+    ElseIf(usize, usize),
     Select(usize),
     Arm(usize, usize),
 }
@@ -94,30 +94,51 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
                 let pos = self.next_pos();
                 match self.state {
                     State::Empty => panic!("Unexpected block close"),
+                    State::ElseIf(if_end, top) => {
+                        self.ret[if_end] = Instruction::Goto(pos + 1);
+                        self.set_state(State::If(top));
+                        self.step(Token::CloseBrace);
+                    }
                     State::If(top) => {
-                        self.ret[top] = Instruction::GotoIfNot(pos);
                         match self.tokens.next() {
                             Some(Token::Else) => {
                                 match self.tokens.next().unwrap() {
                                     // Else
                                     Token::OpenBrace => {
+                                        self.ret[top] = Instruction::GotoIfNot(pos + 1);
                                         self.push(Instruction::Nop);
                                         self.set_state(State::Else(pos));
                                     }
                                     // Else if
                                     token => {
+                                        self.ret[top] = Instruction::GotoIfNot(pos + 1);
                                         self.push(Instruction::Nop);
-                                        self.set_state(State::If(pos));
                                         self.step(token);
+
+                                        loop {
+                                            match self.tokens.next().unwrap() {
+                                                Token::OpenBrace => {
+                                                    self.set_state(State::ElseIf(
+                                                        pos,
+                                                        self.ret.len(),
+                                                    ));
+                                                    self.push(Instruction::Nop);
+                                                    break;
+                                                }
+                                                token => self.step(token),
+                                            }
+                                        }
                                     }
                                 }
                             }
                             // end if
                             Some(token) => {
+                                self.ret[top] = Instruction::GotoIfNot(pos);
                                 self.restore_state();
                                 self.step(token);
                             }
                             None => {
+                                self.ret[top] = Instruction::GotoIfNot(pos);
                                 self.restore_state();
                                 self.push(Instruction::Nop);
                             }
@@ -148,31 +169,83 @@ pub fn parse<'s, I: Iterator<Item = Token<'s>>>(tokens: I) -> Vec<Instruction<'s
 }
 
 #[test]
-fn parse_test() {
+fn parse_if_test() {
     use crate::lexer::lex;
     use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
+    use pretty_assertions::assert_eq;
 
-    let mut lexer = lex(r#"
+    let instructions = parse(lex("
 1 2 < {
     '1은 2보다 작다'@
 }
 '3 + 4 = ' 3 4 + @
-"#);
+"));
 
-    let instructions = parse(lexer);
-
-    assert_eq!(&instructions, &[
-        Instruction::PushInt(1),
-        Instruction::PushInt(2),
-        Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
-        Instruction::GotoIfNot(6),
-        Instruction::PushStr("1은 2보다 작다"),
-        Instruction::PrintL,
-        Instruction::PushStr("3 + 4 = "),
-        Instruction::PushInt(3),
-        Instruction::PushInt(4),
-        Instruction::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
-        Instruction::PrintL,
-    ]);
+    assert_eq!(
+        &instructions,
+        &[
+            Instruction::PushInt(1),
+            Instruction::PushInt(2),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
+            Instruction::GotoIfNot(6),
+            Instruction::PushStr("1은 2보다 작다"),
+            Instruction::PrintL,
+            Instruction::PushStr("3 + 4 = "),
+            Instruction::PushInt(3),
+            Instruction::PushInt(4),
+            Instruction::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
+            Instruction::PrintL,
+        ]
+    );
 }
 
+#[test]
+fn parse_if_else_test() {
+    use crate::lexer::lex;
+    use crate::token::{BooleanOperatorToken, OperatorToken};
+    use pretty_assertions::assert_eq;
+
+    let instructions = parse(lex("
+1 2 < {
+    '1은 2보다 작다'@
+} 그외 2 2 == {
+    '2와 2는 같다'@
+} 그외 1 2 > {
+    '1은 2보다 크다'@
+} 그외 {
+    '1은 2와 같다'@
+}
+'foo'@
+"));
+
+    assert_eq!(
+        &instructions,
+        &[
+            Instruction::PushInt(1),
+            Instruction::PushInt(2),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
+            Instruction::GotoIfNot(7),
+            Instruction::PushStr("1은 2보다 작다"),
+            Instruction::PrintL,
+            Instruction::Goto(14),
+            Instruction::PushInt(2),
+            Instruction::PushInt(2),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::GotoIfNot(14),
+            Instruction::PushStr("2와 2는 같다"),
+            Instruction::PrintL,
+            Instruction::Goto(21),
+            Instruction::PushInt(1),
+            Instruction::PushInt(2),
+            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Greater)),
+            Instruction::GotoIfNot(21),
+            Instruction::PushStr("1은 2보다 크다"),
+            Instruction::PrintL,
+            Instruction::Goto(23),
+            Instruction::PushStr("1은 2와 같다"),
+            Instruction::PrintL,
+            Instruction::PushStr("foo"),
+            Instruction::PrintL,
+        ]
+    );
+}
