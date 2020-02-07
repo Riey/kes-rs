@@ -1,4 +1,4 @@
-use crate::token::{OperatorToken, StrLitPostFix, Token};
+use crate::token::{BooleanOperatorToken, SimpleOperatorToken, Token};
 
 fn is_ident_char(c: char) -> bool {
     matches!(c, '0'..='9' | 'ㄱ'..='ㅎ' | 'ㅏ'..='ㅣ' | '가'..='힣')
@@ -20,15 +20,10 @@ impl<'s> Lexer<'s> {
     fn skip_ws(&mut self) {
         loop {
             match self.text.as_bytes().get(0) {
-                Some(b' ') | Some(b'\n') | Some(b'\t') => {
-                    self.text = self.text.trim_start();
+                Some(b' ') | Some(b'\n') => {
+                    self.text = self.text.trim_start_matches([' ', '\n'].as_ref());
                 }
-                Some(b'/') => {
-                    assert_eq!(
-                        self.text.as_bytes().get(1),
-                        Some(&b'/'),
-                        "Comment need '//' not '/'"
-                    );
+                Some(b';') => {
                     let pos =
                         memchr::memchr(b'\n', self.text.as_bytes()).unwrap_or(self.text.len());
                     unsafe {
@@ -82,27 +77,11 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn read_str(&mut self) -> (&'s str, Option<StrLitPostFix>) {
+    fn read_str(&mut self) -> &'s str {
         let pos = memchr::memchr(b'\'', self.text.as_bytes()).expect("String quote is not paired");
-
         let lit = unsafe { self.text.get_unchecked(..pos) };
-
-        assert_ne!(pos, self.text.len());
-
         self.text = unsafe { self.text.get_unchecked(pos + 1..) };
-        let first = self.text.as_bytes()[0];
-
-        let postfix = match first {
-            b'#' => Some(StrLitPostFix::W),
-            b'@' => Some(StrLitPostFix::L),
-            _ => None,
-        };
-
-        if postfix.is_some() {
-            self.text = unsafe { self.text.get_unchecked(1..) };
-        }
-
-        (lit, postfix)
+        lit
     }
 
     #[inline]
@@ -125,57 +104,57 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_operator(&mut self) -> Option<OperatorToken> {
-        if self.try_strip_prefix("+=") {
-            Some(OperatorToken::AddAssign)
-        } else if self.try_strip_prefix("-=") {
-            Some(OperatorToken::SubAssign)
-        } else if self.try_strip_prefix("*=") {
-            Some(OperatorToken::MulAssign)
-        } else if self.try_strip_prefix("/=") {
-            Some(OperatorToken::DivAssign)
-        } else if self.try_strip_prefix("%=") {
-            Some(OperatorToken::RemAssign)
-        } else if self.try_strip_prefix("^=") {
-            Some(OperatorToken::XorAssign)
-        } else if self.try_strip_prefix("&=") {
-            Some(OperatorToken::AndAssign)
-        } else if self.try_strip_prefix("|=") {
-            Some(OperatorToken::OrAssign)
-        } else if self.try_strip_prefix("^=") {
-            Some(OperatorToken::XorAssign)
-        } else if self.try_strip_prefix("!=") {
-            Some(OperatorToken::NotEqual)
-        } else if self.try_strip_prefix("<=") {
-            Some(OperatorToken::LessOrEqual)
+    fn try_read_boolean_operator(&mut self) -> Option<BooleanOperatorToken> {
+        if self.try_strip_prefix("<=") {
+            Some(BooleanOperatorToken::LessOrEqual)
         } else if self.try_strip_prefix(">=") {
-            Some(OperatorToken::GreaterOrEqual)
+            Some(BooleanOperatorToken::GreaterOrEqual)
         } else if self.try_strip_prefix("==") {
-            Some(OperatorToken::Equal)
-        } else if self.try_match_pop_char('+') {
-            Some(OperatorToken::Add)
-        } else if self.try_match_pop_char('-') {
-            Some(OperatorToken::Sub)
-        } else if self.try_match_pop_char('*') {
-            Some(OperatorToken::Mul)
-        } else if self.try_match_pop_char('/') {
-            Some(OperatorToken::Div)
-        } else if self.try_match_pop_char('=') {
-            Some(OperatorToken::Assign)
-        } else if self.try_match_pop_char('%') {
-            Some(OperatorToken::Rem)
-        } else if self.try_match_pop_char('&') {
-            Some(OperatorToken::And)
-        } else if self.try_match_pop_char('|') {
-            Some(OperatorToken::Or)
-        } else if self.try_match_pop_char('^') {
-            Some(OperatorToken::Xor)
-        } else if self.try_match_pop_char('!') {
-            Some(OperatorToken::Not)
-        } else if self.try_match_pop_char('<') {
-            Some(OperatorToken::Less)
+            Some(BooleanOperatorToken::Equal)
+        } else if self.try_strip_prefix("<>") {
+            Some(BooleanOperatorToken::NotEqual)
         } else if self.try_match_pop_char('>') {
-            Some(OperatorToken::Greater)
+            Some(BooleanOperatorToken::Greater)
+        } else if self.try_match_pop_char('<') {
+            Some(BooleanOperatorToken::Less)
+        } else {
+            None
+        }
+    }
+
+    fn try_read_simple_operator(&mut self) -> Option<SimpleOperatorToken> {
+        if self.try_match_pop_char('+') {
+            Some(SimpleOperatorToken::Add)
+        } else if self.try_match_pop_char('-') {
+            Some(SimpleOperatorToken::Sub)
+        } else if self.try_match_pop_char('*') {
+            Some(SimpleOperatorToken::Mul)
+        } else if self.try_match_pop_char('/') {
+            Some(SimpleOperatorToken::Div)
+        } else if self.try_match_pop_char('%') {
+            Some(SimpleOperatorToken::Rem)
+        } else if self.try_match_pop_char('&') {
+            Some(SimpleOperatorToken::And)
+        } else if self.try_match_pop_char('|') {
+            Some(SimpleOperatorToken::Or)
+        } else if self.try_match_pop_char('^') {
+            Some(SimpleOperatorToken::Xor)
+        } else {
+            None
+        }
+    }
+
+    fn try_read_operator(&mut self) -> Option<Token<'static>> {
+        if let Some(boolean_op) = self.try_read_boolean_operator() {
+            Some(Token::BooleanOperator(boolean_op))
+        } else if let Some(op) = self.try_read_simple_operator() {
+            if self.try_match_pop_char('=') {
+                Some(Token::AssignOperator(Some(op)))
+            } else {
+                Some(Token::SimpleOperator(op))
+            }
+        } else if self.try_match_pop_char('=') {
+            Some(Token::AssignOperator(None))
         } else {
             None
         }
@@ -192,8 +171,8 @@ impl<'s> Iterator for Lexer<'s> {
             return token;
         }
 
-        if let Some(op) = self.try_read_operator() {
-            return Some(Token::Operator(op));
+        if let token @ Some(_) = self.try_read_operator() {
+            return token;
         }
 
         if let Some(ident) = self.try_read_ident() {
@@ -205,19 +184,14 @@ impl<'s> Iterator for Lexer<'s> {
         }
 
         match self.pop_char()? {
-            '\'' => {
-                let (lit, postfix) = self.read_str();
-                Some(Token::StrLit(lit, postfix))
-            }
+            '\'' => Some(Token::StrLit(self.read_str())),
             '$' => Some(Token::Variable(self.read_ident())),
-            ',' => Some(Token::Comma),
-            '(' => Some(Token::OpenParen),
-            ')' => Some(Token::CloseParen),
             '{' => Some(Token::OpenBrace),
             '}' => Some(Token::CloseBrace),
             '?' => Some(Token::Question),
             '#' => Some(Token::Sharp),
-            _ => None,
+            '~' => Some(Token::Not),
+            ch => panic!("Unexpected char {}", ch),
         }
     }
 }
@@ -228,22 +202,21 @@ pub fn lex<'s>(text: &'s str) -> Lexer<'s> {
 
 #[test]
 fn lex_test() {
-    let s = "'ABC'#";
-
     let mut ts = lex("'ABC'#");
 
-    assert_eq!(
-        ts.next().unwrap(),
-        Token::StrLit("ABC", Some(StrLitPostFix::W))
-    );
+    assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
+    assert_eq!(ts.next().unwrap(), Token::Sharp,);
     assert!(ts.text().is_empty());
 
     ts = lex("+=+");
 
     assert_eq!(
         ts.next().unwrap(),
-        Token::Operator(OperatorToken::AddAssign)
+        Token::AssignOperator(Some(SimpleOperatorToken::Add))
     );
-    assert_eq!(ts.next().unwrap(), Token::Operator(OperatorToken::Add));
+    assert_eq!(
+        ts.next().unwrap(),
+        Token::SimpleOperator(SimpleOperatorToken::Add)
+    );
     assert!(ts.text().is_empty());
 }

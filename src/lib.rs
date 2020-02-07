@@ -4,8 +4,6 @@ mod ast;
 mod lexer;
 mod token;
 
-use ast::Expr;
-
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

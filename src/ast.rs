@@ -1,3 +1,5 @@
+#![cfg(features = "foo")]
+
 use crate::token::{OperatorToken, StrLitPostFix, Token};
 use std::iter::Peekable;
 

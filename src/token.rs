@@ -1,50 +1,28 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StrLitPostFix {
-    L,
-    W,
+pub enum SimpleOperatorToken {
+    /// +
+    Add,
+    /// -
+    Sub,
+    /// /
+    Div,
+    /// *
+    Mul,
+    /// %
+    Rem,
+    /// &
+    And,
+    /// |
+    Or,
+    /// ^
+    Xor,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OperatorToken {
-    /// +
-    Add,
-    /// +=
-    AddAssign,
-    /// -
-    Sub,
-    /// -=
-    SubAssign,
-    /// /
-    Div,
-    /// /=
-    DivAssign,
-    /// *
-    Mul,
-    /// *=
-    MulAssign,
-    /// %
-    Rem,
-    /// %=
-    RemAssign,
-    /// &
-    And,
-    /// &=
-    AndAssign,
-    /// |
-    Or,
-    /// |=
-    OrAssign,
-    /// ^
-    Xor,
-    /// ^=
-    XorAssign,
-    /// !
-    Not,
-    /// =
-    Assign,
+pub enum BooleanOperatorToken {
     /// ==
     Equal,
-    /// !=
+    /// <>
     NotEqual,
     /// <
     Less,
@@ -62,16 +40,21 @@ pub enum Token<'s> {
     Else,
     /// 선택
     Select,
-    StrLit(&'s str, Option<StrLitPostFix>),
+    StrLit(&'s str),
     IntLit(u32),
     Builtin(&'s str),
     Variable(&'s str),
-    Operator(OperatorToken),
+    /// ~
+    Not,
+    SimpleOperator(SimpleOperatorToken),
+    BooleanOperator(BooleanOperatorToken),
+    AssignOperator(Option<SimpleOperatorToken>),
+    /// {
     OpenBrace,
+    /// }
     CloseBrace,
-    OpenParen,
-    CloseParen,
-    Comma,
+    /// ?
     Question,
+    /// #
     Sharp,
 }
