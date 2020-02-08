@@ -200,13 +200,7 @@ fn lex_test() {
 
     ts = lex("->+");
 
-    assert_eq!(
-        ts.next().unwrap(),
-        Token::Assign,
-    );
-    assert_eq!(
-        ts.next().unwrap(),
-        Token::Operator(Operator::Add),
-    );
+    assert_eq!(ts.next().unwrap(), Token::Assign,);
+    assert_eq!(ts.next().unwrap(), Token::Operator(Operator::Add),);
     assert!(ts.text.is_empty());
 }
