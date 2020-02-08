@@ -3,7 +3,7 @@ use crate::operator::Operator;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Value<'b> {
@@ -67,6 +67,12 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     }
 }
 
+pub trait Printer {
+    fn print(&mut self, text: &str);
+    fn new_line(&mut self);
+    fn wait(&mut self);
+}
+
 pub struct Context<'b> {
     builtin: &'b HashMap<&'b str, fn(&mut Context<'b>)>,
     cursor: usize,
@@ -96,60 +102,100 @@ impl<'b> Context<'b> {
         self.stack.pop()
     }
 
+    fn pop_u32(&mut self) -> u32 {
+        self.pop().unwrap().try_into().unwrap()
+    }
+
+    fn pop_bool(&mut self) -> bool {
+        self.pop().unwrap().into()
+    }
+
     pub fn run_operator(&mut self, op: Operator) {
         macro_rules! binop {
             ($op:tt) => {
-                u32::try_from(self.pop().unwrap()).unwrap() $op u32::try_from(self.pop().unwrap()).unwrap()
+                let rhs = self.pop_u32();
+                let lhs = self.pop_u32();
+                self.push(lhs $op rhs);
             };
         }
 
         macro_rules! binop_bool {
             ($op:tt) => {
-                if binop!($op) {
+                let rhs = self.pop_u32();
+                let lhs = self.pop_u32();
+                self.push(if lhs $op rhs {
                     1
                 } else {
                     0
-                }
+                });
             };
         }
 
         macro_rules! binop_raw_bool {
             ($op:tt) => {
-                if self.pop().unwrap() $op self.pop().unwrap() {
+                let rhs = self.pop().unwrap();
+                let lhs = self.pop().unwrap();
+                self.push(if lhs $op rhs {
                     1
                 } else {
                     0
-                }
+                });
             }
         }
 
-        let num = match op {
-            Operator::Equal => binop_raw_bool!(==),
-            Operator::NotEqual => binop_raw_bool!(!=),
-            Operator::Greater => binop_bool!(>),
-            Operator::Less => binop_bool!(<),
-            Operator::GreaterOrEqual => binop_bool!(>=),
-            Operator::LessOrEqual => binop_bool!(<=),
+        match op {
+            Operator::Equal => {
+                binop_raw_bool!(==);
+            }
+            Operator::NotEqual => {
+                binop_raw_bool!(!=);
+            }
+            Operator::Greater => {
+                binop_bool!(>);
+            }
+            Operator::Less => {
+                binop_bool!(<);
+            }
+            Operator::GreaterOrEqual => {
+                binop_bool!(>=);
+            }
+            Operator::LessOrEqual => {
+                binop_bool!(<=);
+            }
             Operator::Not => {
-                let b: bool = self.pop().unwrap().into();
+                let b = self.pop_bool();
 
-                if b {
+                self.push(if b {
                     1
                 } else {
                     0
-                }
+                });
             }
-            Operator::Add => binop!(+),
-            Operator::Sub => binop!(-),
-            Operator::Mul => binop!(*),
-            Operator::Div => binop!(/),
-            Operator::Rem => binop!(%),
-            Operator::And => binop!(&),
-            Operator::Or => binop!(|),
-            Operator::Xor => binop!(^),
-        };
-
-        self.push(num);
+            Operator::Add => {
+                binop!(+);
+            }
+            Operator::Sub => {
+                binop!(-);
+            }
+            Operator::Mul => {
+                binop!(*);
+            }
+            Operator::Div => {
+                binop!(/);
+            }
+            Operator::Rem => {
+                binop!(%);
+            }
+            Operator::And => {
+                binop!(&);
+            }
+            Operator::Or => {
+                binop!(|);
+            }
+            Operator::Xor => {
+                binop!(^);
+            }
+        }
     }
 
     pub fn run_instruction(&mut self, inst: Instruction<'b>) -> bool {
@@ -202,7 +248,7 @@ fn run_test() {
         &bump,
         crate::lexer::lex(
             "
-'1 + 2 = ' 1 2 +
+'1 + 2 = ' 1 2 + 2 1 < >
 ",
         ),
     );
@@ -211,5 +257,5 @@ fn run_test() {
 
     ctx.run();
 
-    assert_eq!(ctx.stack, &[Value::Str("1 + 2 = "), Value::Int(3)]);
+    assert_eq!(ctx.stack, &[Value::Str("1 + 2 = "), Value::Int(1)]);
 }
