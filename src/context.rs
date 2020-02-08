@@ -1,9 +1,11 @@
 use crate::instruction::Instruction;
 use crate::operator::Operator;
+use crate::printer::Printer;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+use std::fmt::{self, Write};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Value<'b> {
@@ -15,6 +17,15 @@ impl<'b> Value<'b> {
     #[inline]
     pub fn into_bool(self) -> bool {
         self.into()
+    }
+}
+
+impl<'b> fmt::Display for Value<'b> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::Int(num) => num.fmt(formatter),
+            Value::Str(str) => formatter.write_str(str),
+        }
     }
 }
 
@@ -67,23 +78,18 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     }
 }
 
-pub trait Printer {
-    fn print(&mut self, text: &str);
-    fn new_line(&mut self);
-    fn wait(&mut self);
-}
-
-pub struct Context<'b> {
-    builtin: &'b HashMap<&'b str, fn(&mut Context<'b>)>,
+pub struct Context<'b, P: Printer> {
+    builtin: &'b HashMap<&'b str, fn(&mut Context<'b, P>, &mut P)>,
     cursor: usize,
     instructions: &'b [Instruction<'b>],
     stack: Vec<'b, Value<'b>>,
+    print_buffer: String,
 }
 
-impl<'b> Context<'b> {
+impl<'b, P: Printer> Context<'b, P> {
     pub fn new(
         bump: &'b Bump,
-        builtin: &'b HashMap<&'b str, fn(&mut Context<'b>)>,
+        builtin: &'b HashMap<&'b str, fn(&mut Context<'b, P>, &mut P)>,
         instructions: &'b [Instruction<'b>],
     ) -> Self {
         Self {
@@ -91,6 +97,7 @@ impl<'b> Context<'b> {
             cursor: 0,
             instructions,
             stack: Vec::with_capacity_in(100, bump),
+            print_buffer: String::with_capacity(100),
         }
     }
 
@@ -198,11 +205,19 @@ impl<'b> Context<'b> {
         }
     }
 
-    pub fn run_instruction(&mut self, inst: Instruction<'b>) -> bool {
+    pub fn flush_print(&mut self, printer: &mut P) {
+        self.print_buffer.clear();
+        for v in self.stack.drain(..) {
+            write!(&mut self.print_buffer, "{}", v).unwrap();
+        }
+        printer.print(&self.print_buffer);
+    }
+
+    pub fn run_instruction(&mut self, printer: &mut P, inst: Instruction<'b>) -> bool {
         match inst {
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
-            Instruction::CallBuiltin(name) => self.run_builtin(name),
+            Instruction::CallBuiltin(name) => self.run_builtin(printer, name),
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
                 self.cursor = pos;
@@ -215,47 +230,55 @@ impl<'b> Context<'b> {
 
                 return false;
             }
-
+            Instruction::NewLine => {
+                self.flush_print(printer);
+                printer.new_line();
+            }
+            Instruction::Wait => {
+                self.flush_print(printer);
+                printer.new_line();
+                printer.wait();
+            }
             _ => todo!(),
         }
 
         true
     }
 
-    pub fn run_builtin(&mut self, name: &str) {
-        self.builtin[name](self);
+    pub fn run_builtin(&mut self, printer: &mut P, name: &str) {
+        self.builtin[name](self, printer);
     }
 
-    pub fn clear(&mut self) {
-        self.cursor = 0;
-        self.stack.clear();
-    }
-
-    pub fn run(&mut self) {
+    pub fn run(&mut self, printer: &mut P) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            if self.run_instruction(instruction) {
+            if self.run_instruction(printer, instruction) {
                 self.cursor += 1;
             }
         }
+
+        self.flush_print(printer);
+        self.cursor = 0;
     }
 }
 
 #[test]
 fn run_test() {
+    use crate::printer::RecordPrinter;
     let bump = Bump::with_capacity(8196);
     let builtin = HashMap::default();
     let instructions = crate::parser::parse(
         &bump,
         crate::lexer::lex(
             "
-'1 + 2 = ' 1 2 + 2 1 < >
+'1 + 2 = ' 1 2 + #
 ",
         ),
     );
 
     let mut ctx = Context::new(&bump, &builtin, &instructions);
+    let mut printer = RecordPrinter::new();
 
-    ctx.run();
+    ctx.run(&mut printer);
 
-    assert_eq!(ctx.stack, &[Value::Str("1 + 2 = "), Value::Int(1)]);
+    assert_eq!(printer.text(), "1 + 2 = 3\n#");
 }
