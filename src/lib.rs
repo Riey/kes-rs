@@ -1,7 +1,7 @@
 mod instruction;
-mod lexer;
+pub mod lexer;
 mod operator;
-mod parser;
+pub mod parser;
 mod token;
 
 use std::collections::HashMap;
