@@ -15,12 +15,16 @@ pub enum Token<'s> {
     OpenBrace,
     /// }
     CloseBrace,
-    /// ?
-    Question,
     /// #
     Sharp,
     /// @
     At,
-    /// ->
-    Assign,
+    /// \[$<>]
+    Assign(&'s str),
+    /// \[+]
+    Duplicate,
+    /// \[-]
+    Pop,
+    /// \[?]
+    Conditional,
 }

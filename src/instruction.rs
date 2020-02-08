@@ -5,6 +5,7 @@ pub enum Instruction<'s> {
     Nop,
     Pop,
     Duplicate,
+    Conditional,
     LoadInt(u32),
     LoadStr(&'s str),
     LoadVar(&'s str),

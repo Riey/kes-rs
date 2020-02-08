@@ -261,6 +261,17 @@ impl<'b, P: Printer> Context<'b, P> {
             Instruction::Pop => {
                 self.pop();
             }
+            Instruction::Conditional => {
+                let rhs = self.pop().unwrap();
+                let lhs = self.pop().unwrap();
+                let cond = self.pop_bool();
+
+                self.push(if cond {
+                    lhs
+                } else {
+                    rhs
+                });
+            }
         }
 
         true
@@ -292,8 +303,9 @@ fn run_test() {
         &bump,
         crate::lexer::lex(
             "
+1 2 + 3 == 2 3 [?]
 '1 + 2 = ' 1 2 + #
-5 2 % 7 + -> $4
+5 2 % 7 + [$4]
 $4
 ",
         ),
@@ -304,5 +316,5 @@ $4
 
     ctx.run(&mut printer);
 
-    assert_eq!(printer.text(), "1 + 2 = 3\n#8");
+    assert_eq!(printer.text(), "21 + 2 = 3\n#8");
 }

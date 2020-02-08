@@ -95,22 +95,18 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
 
     fn step(&mut self, token: Token<'s>) {
         match token {
+            Token::Conditional =>self.push(Instruction::Conditional),
+            Token::Duplicate => self.push(Instruction::Duplicate),
+            Token::Pop => self.push(Instruction::Pop),
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
             Token::StrLit(text) => self.push(Instruction::LoadStr(self.intern(text))),
             Token::Variable(ident) => self.push(Instruction::LoadVar(self.intern(ident))),
             Token::Builtin(ident) => self.push(Instruction::CallBuiltin(self.intern(ident))),
-            Token::Assign => {
-                if let Some(Token::Variable(ident)) = self.tokens.next() {
-                    self.push(Instruction::StoreVar(self.intern(ident)));
-                } else {
-                    panic!("Expected variable");
-                }
-            }
+            Token::Assign(ident) => self.push(Instruction::StoreVar(self.intern(ident))),
             Token::Else => unreachable!(),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
             Token::At => self.push(Instruction::NewLine),
             Token::Sharp => self.push(Instruction::Wait),
-            Token::Question => todo!(),
             Token::Select => {
                 self.backup_state();
                 self.set_state(State::Select);
@@ -217,9 +213,8 @@ pub fn parse<'b, 's, I: Iterator<Item = Token<'s>>>(
 }
 
 #[test]
-fn parse_assign() {
+fn parse_condition() {
     use crate::lexer::lex;
-    use crate::operator::Operator;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
@@ -227,7 +222,37 @@ fn parse_assign() {
     let instructions = parse(
         &bump,
         lex("
-1 2 + -> $1
+5 [$0]
+$0 2 % '$0은 짝수' '$0은 홀수' [?]
+"),
+    );
+
+    assert_eq!(
+        instructions,
+        &[
+            Instruction::LoadInt(5),
+            Instruction::StoreVar("0"),
+            Instruction::LoadVar("0"),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Rem),
+            Instruction::LoadStr("$0은 짝수"),
+            Instruction::LoadStr("$0은 홀수"),
+            Instruction::Conditional,
+        ]
+    );
+}
+
+#[test]
+fn parse_assign() {
+    use crate::lexer::lex;
+    use pretty_assertions::assert_eq;
+
+    let bump = Bump::new();
+
+    let instructions = parse(
+        &bump,
+        lex("
+1 2 + [$1]
 "),
     );
 

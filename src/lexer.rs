@@ -94,11 +94,23 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_keyword(&mut self) -> Option<Token<'static>> {
+    fn try_read_keyword(&mut self) -> Option<Token<'s>> {
         if self.try_strip_prefix("그외") {
             Some(Token::Else)
         } else if self.try_strip_prefix("선택") {
             Some(Token::Select)
+        } else if self.try_strip_prefix("[?]") {
+            Some(Token::Conditional)
+        } else if self.try_strip_prefix("[-]") {
+            Some(Token::Pop)
+        } else if self.try_strip_prefix("[+]") {
+            Some(Token::Duplicate)
+        } else if self.try_strip_prefix("[$") {
+            let pos =
+                memchr::memchr(b']', self.text.as_bytes()).expect("Assign bracket is not paired");
+            let name = unsafe { self.text.get_unchecked(..pos) };
+            self.text = unsafe { self.text.get_unchecked(pos + 1..) };
+            Some(Token::Assign(name))
         } else {
             None
         }
@@ -151,10 +163,6 @@ impl<'s> Iterator for Lexer<'s> {
             return token;
         }
 
-        if self.try_strip_prefix("->") {
-            return Some(Token::Assign);
-        }
-
         if let Some(op) = self.try_read_operator() {
             return Some(Token::Operator(op));
         }
@@ -172,7 +180,6 @@ impl<'s> Iterator for Lexer<'s> {
             '$' => Some(Token::Variable(self.read_ident())),
             '{' => Some(Token::OpenBrace),
             '}' => Some(Token::CloseBrace),
-            '?' => Some(Token::Question),
             '#' => Some(Token::Sharp),
             '@' => Some(Token::At),
             ch => panic!("Unexpected char {}", ch),
@@ -193,14 +200,17 @@ fn lex_test() {
     assert_eq!(ts.next().unwrap(), Token::Sharp,);
     assert!(ts.text.is_empty());
 
+    ts = lex("[?][-][+][$123]");
+
+    assert_eq!(ts.next().unwrap(), Token::Conditional,);
+    assert_eq!(ts.next().unwrap(), Token::Pop,);
+    assert_eq!(ts.next().unwrap(), Token::Duplicate,);
+    assert_eq!(ts.next().unwrap(), Token::Assign("123"),);
+    assert!(ts.text.is_empty());
+
+
     ts = lex("'ABC' @");
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap(), Token::At,);
-    assert!(ts.text.is_empty());
-
-    ts = lex("->+");
-
-    assert_eq!(ts.next().unwrap(), Token::Assign,);
-    assert_eq!(ts.next().unwrap(), Token::Operator(Operator::Add),);
     assert!(ts.text.is_empty());
 }
