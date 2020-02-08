@@ -1,7 +1,7 @@
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::printer::Printer;
-use bumpalo::collections::Vec;
+use bumpalo::collections::{String, Vec};
 use bumpalo::Bump;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -78,40 +78,46 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     }
 }
 
-pub struct Context<'b, P: Printer> {
-    builtin: &'b HashMap<&'b str, fn(&mut Context<'b, P>, &mut P)>,
+pub struct Context<'b: 'c, 'c, P: Printer> {
+    bump: &'c Bump,
+    builtin: &'c HashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
+    instructions: &'c [Instruction<'b>],
+    printer: &'c mut P,
+    print_buffer: &'c mut String<'b>,
+    stack: Vec<'c, Value<'c>>,
+    variables: HashMap<&'c str, Value<'c>>,
     cursor: usize,
-    instructions: &'b [Instruction<'b>],
-    variables: HashMap<&'b str, Value<'b>>,
-    stack: Vec<'b, Value<'b>>,
-    print_buffer: String,
 }
 
-impl<'b, P: Printer> Context<'b, P> {
+impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     pub fn new(
-        bump: &'b Bump,
-        builtin: &'b HashMap<&'b str, fn(&mut Context<'b, P>, &mut P)>,
-        instructions: &'b [Instruction<'b>],
+        bump: &'c Bump,
+        builtin: &'c HashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
+        instructions: &'c [Instruction<'b>],
+        printer: &'c mut P,
+        print_buffer: &'c mut String<'b>,
     ) -> Self {
         Self {
+            bump,
             builtin,
-            cursor: 0,
             instructions,
-            variables: HashMap::default(),
-            stack: Vec::with_capacity_in(100, bump),
-            print_buffer: String::with_capacity(100),
+            stack: Vec::with_capacity_in(50, bump),
+            printer,
+            print_buffer,
+            variables: HashMap::new(),
+            cursor: 0,
         }
     }
 
-    pub fn push(&mut self, v: impl Into<Value<'b>>) {
+    pub fn push(&mut self, v: impl Into<Value<'c>>) {
         self.stack.push(v.into());
     }
 
-    pub fn pop(&mut self) -> Option<Value<'b>> {
+    pub fn pop(&mut self) -> Option<Value<'c>> {
         self.stack.pop()
     }
 
-    pub fn peek(&self) -> Option<&Value<'b>> {
+    pub fn peek(&self) -> Option<&Value<'c>> {
         self.stack.last()
     }
 
@@ -178,11 +184,7 @@ impl<'b, P: Printer> Context<'b, P> {
             Operator::Not => {
                 let b = self.pop_bool();
 
-                self.push(if b {
-                    1
-                } else {
-                    0
-                });
+                self.push(if b { 1 } else { 0 });
             }
             Operator::Add => {
                 binop!(+);
@@ -211,15 +213,20 @@ impl<'b, P: Printer> Context<'b, P> {
         }
     }
 
-    pub fn flush_print(&mut self, printer: &mut P) {
+    pub fn flush_print(&mut self) {
         self.print_buffer.clear();
         for v in self.stack.drain(..) {
             write!(&mut self.print_buffer, "{}", v).unwrap();
         }
-        printer.print(&self.print_buffer);
+        self.printer.print(&self.print_buffer);
     }
 
-    pub fn run_instruction(&mut self, printer: &mut P, inst: Instruction<'b>) -> bool {
+    #[inline(always)]
+    pub fn bump(&self) -> &'c Bump {
+        self.bump
+    }
+
+    pub fn run_instruction(&mut self, inst: Instruction<'b>) -> bool {
         match inst {
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
@@ -231,7 +238,7 @@ impl<'b, P: Printer> Context<'b, P> {
                 let item = self.pop().unwrap();
                 self.variables.insert(name, item);
             }
-            Instruction::CallBuiltin(name) => self.run_builtin(printer, name),
+            Instruction::CallBuiltin(name) => self.run_builtin(name),
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
                 self.cursor = pos;
@@ -245,13 +252,13 @@ impl<'b, P: Printer> Context<'b, P> {
                 return false;
             }
             Instruction::NewLine => {
-                self.flush_print(printer);
-                printer.new_line();
+                self.push("\n");
+                self.flush_print();
             }
             Instruction::Wait => {
-                self.flush_print(printer);
-                printer.new_line();
-                printer.wait();
+                self.push("\n");
+                self.flush_print();
+                self.printer.wait();
             }
             Instruction::Duplicate => {
                 let item = self.peek().copied().unwrap();
@@ -266,55 +273,25 @@ impl<'b, P: Printer> Context<'b, P> {
                 let lhs = self.pop().unwrap();
                 let cond = self.pop_bool();
 
-                self.push(if cond {
-                    lhs
-                } else {
-                    rhs
-                });
+                self.push(if cond { lhs } else { rhs });
             }
         }
 
         true
     }
 
-    pub fn run_builtin(&mut self, printer: &mut P, name: &str) {
-        self.builtin[name](self, printer);
+    pub fn run_builtin(&mut self, name: &str) {
+        self.builtin[name](self);
     }
 
-    pub fn run(&mut self, printer: &mut P) {
+    pub fn run(mut self) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            if self.run_instruction(printer, instruction) {
+            if self.run_instruction(instruction) {
                 self.cursor += 1;
             }
         }
 
-        self.flush_print(printer);
-        self.variables.clear();
+        self.flush_print();
         self.cursor = 0;
     }
-}
-
-#[test]
-fn run_test() {
-    use crate::printer::RecordPrinter;
-    let bump = Bump::with_capacity(8196);
-    let builtin = HashMap::default();
-    let instructions = crate::parser::parse(
-        &bump,
-        crate::lexer::lex(
-            "
-1 2 + 3 == 2 3 [?]
-'1 + 2 = ' 1 2 + #
-5 2 % 7 + [$4]
-$4
-",
-        ),
-    );
-
-    let mut ctx = Context::new(&bump, &builtin, &instructions);
-    let mut printer = RecordPrinter::new();
-
-    ctx.run(&mut printer);
-
-    assert_eq!(printer.text(), "21 + 2 = 3\n#8");
 }

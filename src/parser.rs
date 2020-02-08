@@ -95,7 +95,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
 
     fn step(&mut self, token: Token<'s>) {
         match token {
-            Token::Conditional =>self.push(Instruction::Conditional),
+            Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
             Token::Pop => self.push(Instruction::Pop),
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),

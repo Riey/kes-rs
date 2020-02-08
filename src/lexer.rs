@@ -208,7 +208,6 @@ fn lex_test() {
     assert_eq!(ts.next().unwrap(), Token::Assign("123"),);
     assert!(ts.text.is_empty());
 
-
     ts = lex("'ABC' @");
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap(), Token::At,);
