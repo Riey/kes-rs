@@ -1,6 +1,7 @@
 use criterion::*;
 use kes::parser::parse;
 use kes::lexer::lex;
+use bumpalo::Bump;
 
 pub fn throughput_short_bench(c: &mut Criterion) {
     let input = "1 2 3 4 5 6 7 8 9 '1' '2' '3' '4' '5' '6' '7' '8' '9' 정리";
@@ -12,9 +13,12 @@ pub fn throughput_short_bench(c: &mut Criterion) {
         });
     });
     group.bench_with_input("parse", &input, |b, i| {
+        let mut bump = Bump::with_capacity(8196);
         b.iter(|| {
-            let insts = parse(lex(i));
+            let insts = parse(&bump, lex(i));
             assert!(!insts.is_empty());
+            drop(insts);
+            bump.reset();
         });
     });
 }
@@ -29,9 +33,12 @@ pub fn throughput_long_bench(c: &mut Criterion) {
         });
     });
     group.bench_with_input("parse", &input, |b, i| {
+        let mut bump = Bump::with_capacity(1024 * 1024);
         b.iter(|| {
-            let insts = parse(lex(i));
+            let insts = parse(&bump, lex(i));
             assert!(!insts.is_empty());
+            drop(insts);
+            bump.reset();
         });
     });
 }

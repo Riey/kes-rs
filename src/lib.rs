@@ -4,6 +4,8 @@ mod operator;
 pub mod parser;
 mod token;
 
+use bumpalo::Bump;
+use bumpalo::collections::Vec;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
@@ -68,18 +70,20 @@ impl TryFrom<Value> for u32 {
     }
 }
 
-pub struct Script<'s> {
-    instructions: Vec<Instruction<'s>>,
+pub struct Script<'b> {
+    bump: &'b Bump,
+    instructions: Vec<'b, Instruction<'b>>,
 }
 
-impl<'s> Script<'s> {
-    pub fn new(source: &'s str) -> Self {
+impl<'b> Script<'b> {
+    pub fn new(bump: &'b Bump, source: &str) -> Self {
         Self {
-            instructions: crate::parser::parse(crate::lexer::lex(source)),
+            bump,
+            instructions: crate::parser::parse(bump, crate::lexer::lex(source)),
         }
     }
 
-    pub fn instructions(&self) -> &[Instruction<'s>] {
+    pub fn instructions(&self) -> &[Instruction<'b>] {
         &self.instructions
     }
 }

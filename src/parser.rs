@@ -1,6 +1,8 @@
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::token::Token;
+use bumpalo::Bump;
+use bumpalo::collections::Vec;
 
 #[derive(Clone, Copy)]
 enum State {
@@ -13,25 +15,27 @@ enum State {
     SelectArm(usize, usize),
 }
 
-struct Parser<'s, I: Iterator<Item = Token<'s>>> {
+struct Parser<'s, 'b, I: Iterator<Item = Token<'s>>> {
+    bump: &'b Bump,
     tokens: I,
     state: State,
-    stack: Vec<State>,
-    ret: Vec<Instruction<'s>>,
+    stack: Vec<'b, State>,
+    ret: Vec<'b, Instruction<'b>>,
 }
 
-impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
-    fn new(tokens: I) -> Self {
+impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
+    fn new(bump: &'b Bump, tokens: I) -> Self {
         Self {
+            bump,
             tokens,
             state: State::Empty,
-            stack: Vec::with_capacity(20),
-            ret: Vec::with_capacity(1000),
+            stack: Vec::with_capacity_in(20, bump),
+            ret: Vec::with_capacity_in(1000, bump),
         }
     }
 
     #[inline(always)]
-    fn push(&mut self, instruction: Instruction<'s>) {
+    fn push(&mut self, instruction: Instruction<'b>) {
         self.ret.push(instruction);
     }
 
@@ -53,6 +57,10 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
     #[inline(always)]
     fn next_pos(&self) -> usize {
         self.ret.len()
+    }
+
+    fn intern(&self, s: &str) -> &'b str {
+        self.bump.alloc_str(s)
     }
 
     fn move_next_open_brace(&mut self) {
@@ -88,16 +96,16 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
     fn step(&mut self, token: Token<'s>) {
         match token {
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
-            Token::StrLit(text) => self.push(Instruction::LoadStr(text)),
-            Token::Variable(ident) => self.push(Instruction::LoadVar(ident)),
+            Token::StrLit(text) => self.push(Instruction::LoadStr(self.intern(text))),
+            Token::Variable(ident) => self.push(Instruction::LoadVar(self.intern(ident))),
+            Token::Builtin(ident) => self.push(Instruction::CallBuiltin(self.intern(ident))),
             Token::Assign => {
                 if let Some(Token::Variable(ident)) = self.tokens.next() {
-                    self.push(Instruction::StoreVar(ident));
+                    self.push(Instruction::StoreVar(self.intern(ident)));
                 } else {
                     panic!("Expected variable");
                 }
             }
-            Token::Builtin(ident) => self.push(Instruction::CallBuiltin(ident)),
             Token::Else => unreachable!(),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
             Token::At => self.push(Instruction::NewLine),
@@ -192,7 +200,7 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
         }
     }
 
-    fn parse(mut self) -> Vec<Instruction<'s>> {
+    fn parse(mut self) -> Vec<'b, Instruction<'b>> {
         while let Some(token) = self.tokens.next() {
             self.step(token);
         }
@@ -201,8 +209,8 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
     }
 }
 
-pub fn parse<'s, I: Iterator<Item = Token<'s>>>(tokens: I) -> Vec<Instruction<'s>> {
-    Parser::new(tokens).parse()
+pub fn parse<'b, 's, I: Iterator<Item = Token<'s>>>(bump: &'b Bump, tokens: I) -> Vec<'b, Instruction<'b>> {
+    Parser::new(bump, tokens).parse()
 }
 
 #[test]
@@ -211,7 +219,9 @@ fn parse_assign() {
     use crate::operator::Operator;
     use pretty_assertions::assert_eq;
 
-    let instructions = parse(lex("
+    let bump = Bump::new();
+
+    let instructions = parse(&bump, lex("
 1 2 + -> $1
 "));
 
@@ -231,7 +241,9 @@ fn parse_if_test() {
     use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
-    let instructions = parse(lex("
+    let bump = Bump::new();
+
+    let instructions = parse(&bump, lex("
 1 2 < {
     '1은 2보다 작다'@
 }
@@ -261,7 +273,9 @@ fn parse_if_else_test() {
     use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
-    let instructions = parse(lex("
+    let bump = Bump::new();
+
+    let instructions = parse(&bump, lex("
 1 2 < {
     '1은 2보다 작다'@
 } 그외 2 2 == {
@@ -311,7 +325,9 @@ fn parse_select_else() {
     use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
-    let instructions = parse(lex("
+    let bump = Bump::new();
+
+    let instructions = parse(&bump, lex("
 선택 1 {
     그외 {
         ''@
@@ -338,7 +354,9 @@ fn parse_select() {
     use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
-    let instructions = parse(lex("
+    let bump = Bump::new();
+
+    let instructions = parse(&bump, lex("
 선택 1 2 + {
     3 {
         '3'@
