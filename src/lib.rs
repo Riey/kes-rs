@@ -53,6 +53,8 @@ impl<'b, P: Printer> Interpreter<'b, P> {
                 &mut self.print_buffer,
             );
             ctx.run();
+            self.print_buffer.clear();
+            self.exe_bump.reset();
             true
         } else {
             false
