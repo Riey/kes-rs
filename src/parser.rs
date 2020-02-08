@@ -1,20 +1,6 @@
-use crate::token::{BooleanOperatorToken, OperatorToken, Token};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Instruction<'s> {
-    Nop,
-    Pop,
-    Duplicate,
-    PushInt(u32),
-    PushStr(&'s str),
-    PushVar(&'s str),
-    CallBuiltin(&'s str),
-    NewLine,
-    Wait,
-    Operator(OperatorToken),
-    Goto(usize),
-    GotoIfNot(usize),
-}
+use crate::instruction::Instruction;
+use crate::operator::{BooleanOperator, Operator};
+use crate::token::Token;
 
 #[derive(Clone, Copy)]
 enum State {
@@ -86,8 +72,8 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
             token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
                 self.push(Instruction::Duplicate);
                 self.step(token);
-                self.push(Instruction::Operator(OperatorToken::Boolean(
-                    BooleanOperatorToken::Equal,
+                self.push(Instruction::Operator(Operator::Boolean(
+                    BooleanOperator::Equal,
                 )));
                 self.set_state(State::SelectArm(prev_end, self.ret.len()));
                 self.push(Instruction::Nop);
@@ -106,9 +92,12 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
             Token::IntLit(num) => self.push(Instruction::PushInt(num)),
             Token::StrLit(text) => self.push(Instruction::PushStr(text)),
             Token::Variable(ident) => self.push(Instruction::PushVar(ident)),
+            Token::Builtin(ident) => self.push(Instruction::CallBuiltin(ident)),
+            Token::Else => unreachable!(),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
             Token::At => self.push(Instruction::NewLine),
             Token::Sharp => self.push(Instruction::Wait),
+            Token::Question => todo!(),
             Token::Select => {
                 self.backup_state();
                 self.set_state(State::Select);
@@ -193,10 +182,8 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
                         self.restore_state();
                         self.ret[if_end] = Instruction::Goto(pos);
                     }
-                    _ => todo!(),
                 };
             }
-            _ => todo!(),
         }
     }
 
@@ -216,7 +203,7 @@ pub fn parse<'s, I: Iterator<Item = Token<'s>>>(tokens: I) -> Vec<Instruction<'s
 #[test]
 fn parse_if_test() {
     use crate::lexer::lex;
-    use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
+    use crate::operator::{BooleanOperator, SimpleOperator};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -231,14 +218,14 @@ fn parse_if_test() {
         &[
             Instruction::PushInt(1),
             Instruction::PushInt(2),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Less)),
             Instruction::GotoIfNot(6),
             Instruction::PushStr("1은 2보다 작다"),
             Instruction::NewLine,
             Instruction::PushStr("3 + 4 = "),
             Instruction::PushInt(3),
             Instruction::PushInt(4),
-            Instruction::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
+            Instruction::Operator(Operator::Simple(SimpleOperator::Add)),
             Instruction::NewLine,
         ]
     );
@@ -247,7 +234,7 @@ fn parse_if_test() {
 #[test]
 fn parse_if_else_test() {
     use crate::lexer::lex;
-    use crate::token::{BooleanOperatorToken, OperatorToken};
+    use crate::operator::{BooleanOperator, Operator};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -268,21 +255,21 @@ fn parse_if_else_test() {
         &[
             Instruction::PushInt(1),
             Instruction::PushInt(2),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Less)),
             Instruction::GotoIfNot(7),
             Instruction::PushStr("1은 2보다 작다"),
             Instruction::NewLine,
             Instruction::Goto(14),
             Instruction::PushInt(2),
             Instruction::PushInt(2),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
             Instruction::GotoIfNot(14),
             Instruction::PushStr("2와 2는 같다"),
             Instruction::NewLine,
             Instruction::Goto(21),
             Instruction::PushInt(1),
             Instruction::PushInt(2),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Greater)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Greater)),
             Instruction::GotoIfNot(21),
             Instruction::PushStr("1은 2보다 크다"),
             Instruction::NewLine,
@@ -297,9 +284,7 @@ fn parse_if_else_test() {
 
 #[test]
 fn parse_select_else() {
-    
     use crate::lexer::lex;
-    use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -311,22 +296,23 @@ fn parse_select_else() {
 ''@
 "));
 
-    assert_eq!(instructions, &[
-        Instruction::PushInt(1),
-        Instruction::PushStr(""),
-        Instruction::NewLine,
-        Instruction::Pop,
-        Instruction::PushStr(""),
-        Instruction::NewLine,
-    ]);
-
-
+    assert_eq!(
+        instructions,
+        &[
+            Instruction::PushInt(1),
+            Instruction::PushStr(""),
+            Instruction::NewLine,
+            Instruction::Pop,
+            Instruction::PushStr(""),
+            Instruction::NewLine,
+        ]
+    );
 }
 
 #[test]
 fn parse_select() {
     use crate::lexer::lex;
-    use crate::token::{BooleanOperatorToken, SimpleOperatorToken};
+    use crate::operator::{BooleanOperator, SimpleOperator};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -352,24 +338,24 @@ fn parse_select() {
         &[
             Instruction::PushInt(1),
             Instruction::PushInt(2),
-            Instruction::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
+            Instruction::Operator(Operator::Simple(SimpleOperator::Add)),
             Instruction::Duplicate,
             Instruction::PushInt(3),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
             Instruction::GotoIfNot(10),
             Instruction::PushStr("3"),
             Instruction::NewLine,
             Instruction::Goto(16),
             Instruction::Duplicate,
             Instruction::PushInt(2),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
             Instruction::GotoIfNot(17),
             Instruction::PushStr("2"),
             Instruction::NewLine,
             Instruction::Goto(23),
             Instruction::Duplicate,
             Instruction::PushInt(1),
-            Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
+            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
             Instruction::GotoIfNot(24),
             Instruction::PushStr("1"),
             Instruction::NewLine,

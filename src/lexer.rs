@@ -1,7 +1,11 @@
-use crate::token::{BooleanOperatorToken, OperatorToken, SimpleOperatorToken, Token};
+use crate::operator::{BooleanOperator, Operator, SimpleOperator};
+use crate::token::Token;
 
 fn is_ident_char(c: char) -> bool {
-    matches!(c, '0'..='9' | 'ㄱ'..='ㅎ' | 'ㅏ'..='ㅣ' | '가'..='힣')
+    match c {
+        '0'..='9' | 'ㄱ'..='ㅎ' | 'ㅏ'..='ㅣ' | '가'..='힣' => true,
+        _ => false,
+    }
 }
 
 fn is_not_ident_char(c: char) -> bool {
@@ -13,10 +17,6 @@ pub struct Lexer<'s> {
 }
 
 impl<'s> Lexer<'s> {
-    pub fn text(&self) -> &str {
-        self.text
-    }
-
     fn skip_ws(&mut self) {
         loop {
             match self.text.as_bytes().get(0) {
@@ -86,8 +86,8 @@ impl<'s> Lexer<'s> {
 
     #[inline]
     fn try_strip_prefix(&mut self, prefix: &str) -> bool {
-        if let Some(left) = self.text.strip_prefix(prefix) {
-            self.text = left;
+        if self.text.starts_with(prefix) {
+            self.text = unsafe { self.text.get_unchecked(prefix.len()..) };
             true
         } else {
             false
@@ -104,59 +104,59 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_boolean_operator(&mut self) -> Option<BooleanOperatorToken> {
+    fn try_read_boolean_operator(&mut self) -> Option<BooleanOperator> {
         if self.try_strip_prefix("<=") {
-            Some(BooleanOperatorToken::LessOrEqual)
+            Some(BooleanOperator::LessOrEqual)
         } else if self.try_strip_prefix(">=") {
-            Some(BooleanOperatorToken::GreaterOrEqual)
+            Some(BooleanOperator::GreaterOrEqual)
         } else if self.try_strip_prefix("==") {
-            Some(BooleanOperatorToken::Equal)
+            Some(BooleanOperator::Equal)
         } else if self.try_strip_prefix("<>") {
-            Some(BooleanOperatorToken::NotEqual)
+            Some(BooleanOperator::NotEqual)
         } else if self.try_match_pop_char('>') {
-            Some(BooleanOperatorToken::Greater)
+            Some(BooleanOperator::Greater)
         } else if self.try_match_pop_char('<') {
-            Some(BooleanOperatorToken::Less)
+            Some(BooleanOperator::Less)
         } else if self.try_match_pop_char('~') {
-            Some(BooleanOperatorToken::Not)
+            Some(BooleanOperator::Not)
         } else {
             None
         }
     }
 
-    fn try_read_simple_operator(&mut self) -> Option<SimpleOperatorToken> {
+    fn try_read_simple_operator(&mut self) -> Option<SimpleOperator> {
         if self.try_match_pop_char('+') {
-            Some(SimpleOperatorToken::Add)
+            Some(SimpleOperator::Add)
         } else if self.try_match_pop_char('-') {
-            Some(SimpleOperatorToken::Sub)
+            Some(SimpleOperator::Sub)
         } else if self.try_match_pop_char('*') {
-            Some(SimpleOperatorToken::Mul)
+            Some(SimpleOperator::Mul)
         } else if self.try_match_pop_char('/') {
-            Some(SimpleOperatorToken::Div)
+            Some(SimpleOperator::Div)
         } else if self.try_match_pop_char('%') {
-            Some(SimpleOperatorToken::Rem)
+            Some(SimpleOperator::Rem)
         } else if self.try_match_pop_char('&') {
-            Some(SimpleOperatorToken::And)
+            Some(SimpleOperator::And)
         } else if self.try_match_pop_char('|') {
-            Some(SimpleOperatorToken::Or)
+            Some(SimpleOperator::Or)
         } else if self.try_match_pop_char('^') {
-            Some(SimpleOperatorToken::Xor)
+            Some(SimpleOperator::Xor)
         } else {
             None
         }
     }
 
-    fn try_read_operator(&mut self) -> Option<OperatorToken> {
+    fn try_read_operator(&mut self) -> Option<Operator> {
         if let Some(op) = self.try_read_boolean_operator() {
-            Some(OperatorToken::Boolean(op))
+            Some(Operator::Boolean(op))
         } else if let Some(op) = self.try_read_simple_operator() {
             if self.try_match_pop_char('=') {
-                Some(OperatorToken::Assign(Some(op)))
+                Some(Operator::Assign(Some(op)))
             } else {
-                Some(OperatorToken::Simple(op))
+                Some(Operator::Simple(op))
             }
         } else if self.try_match_pop_char('=') {
-            Some(OperatorToken::Assign(None))
+            Some(Operator::Assign(None))
         } else {
             None
         }
@@ -208,22 +208,22 @@ fn lex_test() {
 
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap(), Token::Sharp,);
-    assert!(ts.text().is_empty());
+    assert!(ts.text.is_empty());
 
     ts = lex("'ABC' @");
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap(), Token::At,);
-    assert!(ts.text().is_empty());
+    assert!(ts.text.is_empty());
 
     ts = lex("+=+");
 
     assert_eq!(
         ts.next().unwrap(),
-        Token::Operator(OperatorToken::Assign(Some(SimpleOperatorToken::Add)))
+        Token::Operator(Operator::Assign(Some(SimpleOperator::Add)))
     );
     assert_eq!(
         ts.next().unwrap(),
-        Token::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
+        Token::Operator(Operator::Simple(SimpleOperator::Add)),
     );
-    assert!(ts.text().is_empty());
+    assert!(ts.text.is_empty());
 }

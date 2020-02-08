@@ -1,16 +1,32 @@
-#![feature(str_strip)]
-
-mod ast;
+mod instruction;
 mod lexer;
+mod operator;
 mod parser;
 mod token;
 
-use std::collections::BTreeMap;
+pub use crate::instruction::Instruction;
+pub use crate::operator::{BooleanOperator, Operator, SimpleOperator};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Value {
     Int(u32),
     Str(String),
+}
+
+pub struct Script<'s> {
+    instructions: Vec<Instruction<'s>>,
+}
+
+impl<'s> Script<'s> {
+    pub fn new(source: &'s str) -> Self {
+        Self {
+            instructions: crate::parser::parse(crate::lexer::lex(source)),
+        }
+    }
+
+    pub fn instructions(&self) -> &[Instruction<'s>] {
+        &self.instructions
+    }
 }
 
 //pub struct Context {

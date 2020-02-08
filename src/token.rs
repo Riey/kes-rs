@@ -1,47 +1,4 @@
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SimpleOperatorToken {
-    /// +
-    Add,
-    /// -
-    Sub,
-    /// /
-    Div,
-    /// *
-    Mul,
-    /// %
-    Rem,
-    /// &
-    And,
-    /// |
-    Or,
-    /// ^
-    Xor,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BooleanOperatorToken {
-    /// ==
-    Equal,
-    /// <>
-    NotEqual,
-    /// <
-    Less,
-    /// <=
-    LessOrEqual,
-    /// >
-    Greater,
-    /// >=
-    GreaterOrEqual,
-    /// ~
-    Not,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OperatorToken {
-    Simple(SimpleOperatorToken),
-    Boolean(BooleanOperatorToken),
-    Assign(Option<SimpleOperatorToken>),
-}
+use crate::operator::Operator;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Token<'s> {
@@ -53,7 +10,7 @@ pub enum Token<'s> {
     IntLit(u32),
     Builtin(&'s str),
     Variable(&'s str),
-    Operator(OperatorToken),
+    Operator(Operator),
     /// {
     OpenBrace,
     /// }
