@@ -1,7 +1,7 @@
-use criterion::*;
-use kes::parser::parse;
-use kes::lexer::lex;
 use bumpalo::Bump;
+use criterion::*;
+use kes::lexer::lex;
+use kes::parser::parse;
 
 pub fn throughput_short_bench(c: &mut Criterion) {
     let input = "1 2 3 4 5 6 7 8 9 '1' '2' '3' '4' '5' '6' '7' '8' '9' 정리";
@@ -45,4 +45,3 @@ pub fn throughput_long_bench(c: &mut Criterion) {
 
 criterion_group!(benches, throughput_short_bench, throughput_long_bench);
 criterion_main!(benches);
-

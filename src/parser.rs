@@ -1,8 +1,8 @@
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::token::Token;
-use bumpalo::Bump;
 use bumpalo::collections::Vec;
+use bumpalo::Bump;
 
 #[derive(Clone, Copy)]
 enum State {
@@ -209,7 +209,10 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
     }
 }
 
-pub fn parse<'b, 's, I: Iterator<Item = Token<'s>>>(bump: &'b Bump, tokens: I) -> Vec<'b, Instruction<'b>> {
+pub fn parse<'b, 's, I: Iterator<Item = Token<'s>>>(
+    bump: &'b Bump,
+    tokens: I,
+) -> Vec<'b, Instruction<'b>> {
     Parser::new(bump, tokens).parse()
 }
 
@@ -221,9 +224,12 @@ fn parse_assign() {
 
     let bump = Bump::new();
 
-    let instructions = parse(&bump, lex("
+    let instructions = parse(
+        &bump,
+        lex("
 1 2 + -> $1
-"));
+"),
+    );
 
     assert_eq!(
         instructions,
@@ -243,12 +249,15 @@ fn parse_if_test() {
 
     let bump = Bump::new();
 
-    let instructions = parse(&bump, lex("
+    let instructions = parse(
+        &bump,
+        lex("
 1 2 < {
     '1은 2보다 작다'@
 }
 '3 + 4 = ' 3 4 + @
-"));
+"),
+    );
 
     assert_eq!(
         &instructions,
@@ -275,7 +284,9 @@ fn parse_if_else_test() {
 
     let bump = Bump::new();
 
-    let instructions = parse(&bump, lex("
+    let instructions = parse(
+        &bump,
+        lex("
 1 2 < {
     '1은 2보다 작다'@
 } 그외 2 2 == {
@@ -286,7 +297,8 @@ fn parse_if_else_test() {
     '1은 2와 같다'@
 }
 'foo'@
-"));
+"),
+    );
 
     assert_eq!(
         &instructions,
@@ -327,14 +339,17 @@ fn parse_select_else() {
 
     let bump = Bump::new();
 
-    let instructions = parse(&bump, lex("
+    let instructions = parse(
+        &bump,
+        lex("
 선택 1 {
     그외 {
         ''@
     }
 }
 ''@
-"));
+"),
+    );
 
     assert_eq!(
         instructions,
@@ -356,7 +371,9 @@ fn parse_select() {
 
     let bump = Bump::new();
 
-    let instructions = parse(&bump, lex("
+    let instructions = parse(
+        &bump,
+        lex("
 선택 1 2 + {
     3 {
         '3'@
@@ -372,7 +389,8 @@ fn parse_select() {
     }
 }
 'foo'@
-"));
+"),
+    );
 
     assert_eq!(
         &instructions,
