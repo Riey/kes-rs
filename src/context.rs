@@ -82,6 +82,7 @@ pub struct Context<'b, P: Printer> {
     builtin: &'b HashMap<&'b str, fn(&mut Context<'b, P>, &mut P)>,
     cursor: usize,
     instructions: &'b [Instruction<'b>],
+    variables: HashMap<&'b str, Value<'b>>,
     stack: Vec<'b, Value<'b>>,
     print_buffer: String,
 }
@@ -96,6 +97,7 @@ impl<'b, P: Printer> Context<'b, P> {
             builtin,
             cursor: 0,
             instructions,
+            variables: HashMap::default(),
             stack: Vec::with_capacity_in(100, bump),
             print_buffer: String::with_capacity(100),
         }
@@ -107,6 +109,10 @@ impl<'b, P: Printer> Context<'b, P> {
 
     pub fn pop(&mut self) -> Option<Value<'b>> {
         self.stack.pop()
+    }
+
+    pub fn peek(&self) -> Option<&Value<'b>> {
+        self.stack.last()
     }
 
     fn pop_u32(&mut self) -> u32 {
@@ -217,6 +223,14 @@ impl<'b, P: Printer> Context<'b, P> {
         match inst {
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
+            Instruction::LoadVar(name) => {
+                let item = self.variables[name];
+                self.push(item);
+            }
+            Instruction::StoreVar(name) => {
+                let item = self.pop().unwrap();
+                self.variables.insert(name, item);
+            }
             Instruction::CallBuiltin(name) => self.run_builtin(printer, name),
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
@@ -239,7 +253,14 @@ impl<'b, P: Printer> Context<'b, P> {
                 printer.new_line();
                 printer.wait();
             }
-            _ => todo!(),
+            Instruction::Duplicate => {
+                let item = self.peek().copied().unwrap();
+                self.push(item);
+            }
+            Instruction::Nop => {}
+            Instruction::Pop => {
+                self.pop();
+            }
         }
 
         true
@@ -257,6 +278,7 @@ impl<'b, P: Printer> Context<'b, P> {
         }
 
         self.flush_print(printer);
+        self.variables.clear();
         self.cursor = 0;
     }
 }
@@ -271,6 +293,8 @@ fn run_test() {
         crate::lexer::lex(
             "
 '1 + 2 = ' 1 2 + #
+5 2 % 7 + -> $4
+$4
 ",
         ),
     );
@@ -280,5 +304,5 @@ fn run_test() {
 
     ctx.run(&mut printer);
 
-    assert_eq!(printer.text(), "1 + 2 = 3\n#");
+    assert_eq!(printer.text(), "1 + 2 = 3\n#8");
 }
