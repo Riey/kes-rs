@@ -192,7 +192,6 @@ impl<'s> Iterator for Lexer<'s> {
             '}' => Some(Token::CloseBrace),
             '?' => Some(Token::Question),
             '#' => Some(Token::Sharp),
-            ':' => Some(Token::Colon),
             '@' => Some(Token::At),
             ch => panic!("Unexpected char {}", ch),
         }

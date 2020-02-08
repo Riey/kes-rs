@@ -60,8 +60,6 @@ pub enum Token<'s> {
     CloseBrace,
     /// ?
     Question,
-    /// :
-    Colon,
     /// #
     Sharp,
     /// @

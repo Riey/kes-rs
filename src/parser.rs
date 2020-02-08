@@ -3,18 +3,17 @@ use crate::token::{BooleanOperatorToken, OperatorToken, Token};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Instruction<'s> {
     Nop,
+    Pop,
+    Duplicate,
     PushInt(u32),
     PushStr(&'s str),
     PushVar(&'s str),
     CallBuiltin(&'s str),
-    Print,
-    PrintL,
-    PrintW,
+    NewLine,
+    Wait,
     Operator(OperatorToken),
     Goto(usize),
     GotoIfNot(usize),
-    EndBlock,
-    Duplicate,
 }
 
 #[derive(Clone, Copy)]
@@ -94,7 +93,7 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
                 self.push(Instruction::Nop);
             }
             Token::Else => {
-                self.set_state(State::SelectElse(self.ret.len() - 1));
+                self.set_state(State::SelectElse(prev_end));
             }
             token => panic!("Unexpected token {:?}", token),
         }
@@ -108,9 +107,8 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
             Token::StrLit(text) => self.push(Instruction::PushStr(text)),
             Token::Variable(ident) => self.push(Instruction::PushVar(ident)),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
-            Token::Colon => self.push(Instruction::Print),
-            Token::At => self.push(Instruction::PrintL),
-            Token::Sharp => self.push(Instruction::PrintW),
+            Token::At => self.push(Instruction::NewLine),
+            Token::Sharp => self.push(Instruction::Wait),
             Token::Select => {
                 self.backup_state();
                 self.set_state(State::Select);
@@ -140,6 +138,7 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
                     }
                     State::Select => {
                         self.restore_state();
+                        self.push(Instruction::Pop);
                     }
                     State::SelectArm(prev_end, top) => {
                         self.restore_state();
@@ -152,7 +151,9 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
                     }
                     State::SelectElse(top) => {
                         self.restore_state();
-                        self.ret[top] = Instruction::Goto(pos);
+                        if top != 0 {
+                            self.ret[top] = Instruction::Goto(pos);
+                        }
                     }
                     State::If(top) => {
                         match self.tokens.next() {
@@ -233,12 +234,12 @@ fn parse_if_test() {
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
             Instruction::GotoIfNot(6),
             Instruction::PushStr("1은 2보다 작다"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::PushStr("3 + 4 = "),
             Instruction::PushInt(3),
             Instruction::PushInt(4),
             Instruction::Operator(OperatorToken::Simple(SimpleOperatorToken::Add)),
-            Instruction::PrintL,
+            Instruction::NewLine,
         ]
     );
 }
@@ -270,26 +271,26 @@ fn parse_if_else_test() {
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Less)),
             Instruction::GotoIfNot(7),
             Instruction::PushStr("1은 2보다 작다"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::Goto(14),
             Instruction::PushInt(2),
             Instruction::PushInt(2),
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
             Instruction::GotoIfNot(14),
             Instruction::PushStr("2와 2는 같다"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::Goto(21),
             Instruction::PushInt(1),
             Instruction::PushInt(2),
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Greater)),
             Instruction::GotoIfNot(21),
             Instruction::PushStr("1은 2보다 크다"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::Goto(23),
             Instruction::PushStr("1은 2와 같다"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::PushStr("foo"),
-            Instruction::PrintL,
+            Instruction::NewLine,
         ]
     );
 }
@@ -311,8 +312,12 @@ fn parse_select_else() {
 "));
 
     assert_eq!(instructions, &[
-        Instruction::Goto(3),
         Instruction::PushInt(1),
+        Instruction::PushStr(""),
+        Instruction::NewLine,
+        Instruction::Pop,
+        Instruction::PushStr(""),
+        Instruction::NewLine,
     ]);
 
 
@@ -353,26 +358,27 @@ fn parse_select() {
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
             Instruction::GotoIfNot(10),
             Instruction::PushStr("3"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::Goto(16),
             Instruction::Duplicate,
             Instruction::PushInt(2),
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
             Instruction::GotoIfNot(17),
             Instruction::PushStr("2"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::Goto(23),
             Instruction::Duplicate,
             Instruction::PushInt(1),
             Instruction::Operator(OperatorToken::Boolean(BooleanOperatorToken::Equal)),
             Instruction::GotoIfNot(24),
             Instruction::PushStr("1"),
-            Instruction::PrintL,
+            Instruction::NewLine,
             Instruction::Goto(26),
             Instruction::PushStr("other"),
-            Instruction::PrintL,
+            Instruction::NewLine,
+            Instruction::Pop,
             Instruction::PushStr("foo"),
-            Instruction::PrintL,
+            Instruction::NewLine,
         ]
     );
 }
