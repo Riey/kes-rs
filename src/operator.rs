@@ -1,5 +1,5 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SimpleOperator {
+pub enum Operator {
     /// +
     Add,
     /// -
@@ -16,10 +16,7 @@ pub enum SimpleOperator {
     Or,
     /// ^
     Xor,
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BooleanOperator {
     /// ==
     Equal,
     /// <>
@@ -34,11 +31,4 @@ pub enum BooleanOperator {
     GreaterOrEqual,
     /// ~
     Not,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Operator {
-    Simple(SimpleOperator),
-    Boolean(BooleanOperator),
-    Assign(Option<SimpleOperator>),
 }

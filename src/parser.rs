@@ -1,5 +1,5 @@
 use crate::instruction::Instruction;
-use crate::operator::{BooleanOperator, Operator};
+use crate::operator::Operator;
 use crate::token::Token;
 
 #[derive(Clone, Copy)]
@@ -72,9 +72,7 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
             token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
                 self.push(Instruction::Duplicate);
                 self.step(token);
-                self.push(Instruction::Operator(Operator::Boolean(
-                    BooleanOperator::Equal,
-                )));
+                self.push(Instruction::Operator(Operator::Equal));
                 self.set_state(State::SelectArm(prev_end, self.ret.len()));
                 self.push(Instruction::Nop);
             }
@@ -89,9 +87,16 @@ impl<'s, I: Iterator<Item = Token<'s>>> Parser<'s, I> {
 
     fn step(&mut self, token: Token<'s>) {
         match token {
-            Token::IntLit(num) => self.push(Instruction::PushInt(num)),
-            Token::StrLit(text) => self.push(Instruction::PushStr(text)),
-            Token::Variable(ident) => self.push(Instruction::PushVar(ident)),
+            Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
+            Token::StrLit(text) => self.push(Instruction::LoadStr(text)),
+            Token::Variable(ident) => self.push(Instruction::LoadVar(ident)),
+            Token::Assign => {
+                if let Some(Token::Variable(ident)) = self.tokens.next() {
+                    self.push(Instruction::StoreVar(ident));
+                } else {
+                    panic!("Expected variable");
+                }
+            }
             Token::Builtin(ident) => self.push(Instruction::CallBuiltin(ident)),
             Token::Else => unreachable!(),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
@@ -201,9 +206,29 @@ pub fn parse<'s, I: Iterator<Item = Token<'s>>>(tokens: I) -> Vec<Instruction<'s
 }
 
 #[test]
+fn parse_assign() {
+    use crate::lexer::lex;
+    use crate::operator::Operator;
+    use pretty_assertions::assert_eq;
+
+    let instructions = parse(lex("
+1 2 + -> $1
+"));
+
+    assert_eq!(
+        instructions,
+        &[
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Add),
+            Instruction::StoreVar("1"),
+        ]
+    );
+}
+
+#[test]
 fn parse_if_test() {
     use crate::lexer::lex;
-    use crate::operator::{BooleanOperator, SimpleOperator};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -216,16 +241,16 @@ fn parse_if_test() {
     assert_eq!(
         &instructions,
         &[
-            Instruction::PushInt(1),
-            Instruction::PushInt(2),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Less)),
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Less),
             Instruction::GotoIfNot(6),
-            Instruction::PushStr("1은 2보다 작다"),
+            Instruction::LoadStr("1은 2보다 작다"),
             Instruction::NewLine,
-            Instruction::PushStr("3 + 4 = "),
-            Instruction::PushInt(3),
-            Instruction::PushInt(4),
-            Instruction::Operator(Operator::Simple(SimpleOperator::Add)),
+            Instruction::LoadStr("3 + 4 = "),
+            Instruction::LoadInt(3),
+            Instruction::LoadInt(4),
+            Instruction::Operator(Operator::Add),
             Instruction::NewLine,
         ]
     );
@@ -234,7 +259,6 @@ fn parse_if_test() {
 #[test]
 fn parse_if_else_test() {
     use crate::lexer::lex;
-    use crate::operator::{BooleanOperator, Operator};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -253,30 +277,30 @@ fn parse_if_else_test() {
     assert_eq!(
         &instructions,
         &[
-            Instruction::PushInt(1),
-            Instruction::PushInt(2),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Less)),
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Less),
             Instruction::GotoIfNot(7),
-            Instruction::PushStr("1은 2보다 작다"),
+            Instruction::LoadStr("1은 2보다 작다"),
             Instruction::NewLine,
             Instruction::Goto(14),
-            Instruction::PushInt(2),
-            Instruction::PushInt(2),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
+            Instruction::LoadInt(2),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Equal),
             Instruction::GotoIfNot(14),
-            Instruction::PushStr("2와 2는 같다"),
+            Instruction::LoadStr("2와 2는 같다"),
             Instruction::NewLine,
             Instruction::Goto(21),
-            Instruction::PushInt(1),
-            Instruction::PushInt(2),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Greater)),
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Greater),
             Instruction::GotoIfNot(21),
-            Instruction::PushStr("1은 2보다 크다"),
+            Instruction::LoadStr("1은 2보다 크다"),
             Instruction::NewLine,
             Instruction::Goto(23),
-            Instruction::PushStr("1은 2와 같다"),
+            Instruction::LoadStr("1은 2와 같다"),
             Instruction::NewLine,
-            Instruction::PushStr("foo"),
+            Instruction::LoadStr("foo"),
             Instruction::NewLine,
         ]
     );
@@ -299,11 +323,11 @@ fn parse_select_else() {
     assert_eq!(
         instructions,
         &[
-            Instruction::PushInt(1),
-            Instruction::PushStr(""),
+            Instruction::LoadInt(1),
+            Instruction::LoadStr(""),
             Instruction::NewLine,
             Instruction::Pop,
-            Instruction::PushStr(""),
+            Instruction::LoadStr(""),
             Instruction::NewLine,
         ]
     );
@@ -312,7 +336,6 @@ fn parse_select_else() {
 #[test]
 fn parse_select() {
     use crate::lexer::lex;
-    use crate::operator::{BooleanOperator, SimpleOperator};
     use pretty_assertions::assert_eq;
 
     let instructions = parse(lex("
@@ -336,34 +359,34 @@ fn parse_select() {
     assert_eq!(
         &instructions,
         &[
-            Instruction::PushInt(1),
-            Instruction::PushInt(2),
-            Instruction::Operator(Operator::Simple(SimpleOperator::Add)),
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Add),
             Instruction::Duplicate,
-            Instruction::PushInt(3),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
+            Instruction::LoadInt(3),
+            Instruction::Operator(Operator::Equal),
             Instruction::GotoIfNot(10),
-            Instruction::PushStr("3"),
+            Instruction::LoadStr("3"),
             Instruction::NewLine,
             Instruction::Goto(16),
             Instruction::Duplicate,
-            Instruction::PushInt(2),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Equal),
             Instruction::GotoIfNot(17),
-            Instruction::PushStr("2"),
+            Instruction::LoadStr("2"),
             Instruction::NewLine,
             Instruction::Goto(23),
             Instruction::Duplicate,
-            Instruction::PushInt(1),
-            Instruction::Operator(Operator::Boolean(BooleanOperator::Equal)),
+            Instruction::LoadInt(1),
+            Instruction::Operator(Operator::Equal),
             Instruction::GotoIfNot(24),
-            Instruction::PushStr("1"),
+            Instruction::LoadStr("1"),
             Instruction::NewLine,
             Instruction::Goto(26),
-            Instruction::PushStr("other"),
+            Instruction::LoadStr("other"),
             Instruction::NewLine,
             Instruction::Pop,
-            Instruction::PushStr("foo"),
+            Instruction::LoadStr("foo"),
             Instruction::NewLine,
         ]
     );

@@ -1,4 +1,4 @@
-use crate::operator::{BooleanOperator, Operator, SimpleOperator};
+use crate::operator::Operator;
 use crate::token::Token;
 
 fn is_ident_char(c: char) -> bool {
@@ -104,59 +104,37 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_boolean_operator(&mut self) -> Option<BooleanOperator> {
-        if self.try_strip_prefix("<=") {
-            Some(BooleanOperator::LessOrEqual)
-        } else if self.try_strip_prefix(">=") {
-            Some(BooleanOperator::GreaterOrEqual)
-        } else if self.try_strip_prefix("==") {
-            Some(BooleanOperator::Equal)
-        } else if self.try_strip_prefix("<>") {
-            Some(BooleanOperator::NotEqual)
-        } else if self.try_match_pop_char('>') {
-            Some(BooleanOperator::Greater)
-        } else if self.try_match_pop_char('<') {
-            Some(BooleanOperator::Less)
-        } else if self.try_match_pop_char('~') {
-            Some(BooleanOperator::Not)
-        } else {
-            None
-        }
-    }
-
-    fn try_read_simple_operator(&mut self) -> Option<SimpleOperator> {
-        if self.try_match_pop_char('+') {
-            Some(SimpleOperator::Add)
-        } else if self.try_match_pop_char('-') {
-            Some(SimpleOperator::Sub)
-        } else if self.try_match_pop_char('*') {
-            Some(SimpleOperator::Mul)
-        } else if self.try_match_pop_char('/') {
-            Some(SimpleOperator::Div)
-        } else if self.try_match_pop_char('%') {
-            Some(SimpleOperator::Rem)
-        } else if self.try_match_pop_char('&') {
-            Some(SimpleOperator::And)
-        } else if self.try_match_pop_char('|') {
-            Some(SimpleOperator::Or)
-        } else if self.try_match_pop_char('^') {
-            Some(SimpleOperator::Xor)
-        } else {
-            None
-        }
-    }
-
     fn try_read_operator(&mut self) -> Option<Operator> {
-        if let Some(op) = self.try_read_boolean_operator() {
-            Some(Operator::Boolean(op))
-        } else if let Some(op) = self.try_read_simple_operator() {
-            if self.try_match_pop_char('=') {
-                Some(Operator::Assign(Some(op)))
-            } else {
-                Some(Operator::Simple(op))
-            }
-        } else if self.try_match_pop_char('=') {
-            Some(Operator::Assign(None))
+        if self.try_match_pop_char('+') {
+            Some(Operator::Add)
+        } else if self.try_match_pop_char('-') {
+            Some(Operator::Sub)
+        } else if self.try_match_pop_char('*') {
+            Some(Operator::Mul)
+        } else if self.try_match_pop_char('/') {
+            Some(Operator::Div)
+        } else if self.try_match_pop_char('%') {
+            Some(Operator::Rem)
+        } else if self.try_match_pop_char('&') {
+            Some(Operator::And)
+        } else if self.try_match_pop_char('|') {
+            Some(Operator::Or)
+        } else if self.try_match_pop_char('^') {
+            Some(Operator::Xor)
+        } else if self.try_strip_prefix("<=") {
+            Some(Operator::LessOrEqual)
+        } else if self.try_strip_prefix(">=") {
+            Some(Operator::GreaterOrEqual)
+        } else if self.try_strip_prefix("==") {
+            Some(Operator::Equal)
+        } else if self.try_strip_prefix("<>") {
+            Some(Operator::NotEqual)
+        } else if self.try_match_pop_char('>') {
+            Some(Operator::Greater)
+        } else if self.try_match_pop_char('<') {
+            Some(Operator::Less)
+        } else if self.try_match_pop_char('~') {
+            Some(Operator::Not)
         } else {
             None
         }
@@ -171,6 +149,10 @@ impl<'s> Iterator for Lexer<'s> {
 
         if let token @ Some(_) = self.try_read_keyword() {
             return token;
+        }
+
+        if self.try_strip_prefix("->") {
+            return Some(Token::Assign);
         }
 
         if let Some(op) = self.try_read_operator() {
@@ -204,6 +186,7 @@ pub fn lex<'s>(text: &'s str) -> Lexer<'s> {
 
 #[test]
 fn lex_test() {
+    use pretty_assertions::assert_eq;
     let mut ts = lex("'ABC'#");
 
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
@@ -215,15 +198,15 @@ fn lex_test() {
     assert_eq!(ts.next().unwrap(), Token::At,);
     assert!(ts.text.is_empty());
 
-    ts = lex("+=+");
+    ts = lex("->+");
 
     assert_eq!(
         ts.next().unwrap(),
-        Token::Operator(Operator::Assign(Some(SimpleOperator::Add)))
+        Token::Assign,
     );
     assert_eq!(
         ts.next().unwrap(),
-        Token::Operator(Operator::Simple(SimpleOperator::Add)),
+        Token::Operator(Operator::Add),
     );
     assert!(ts.text.is_empty());
 }
