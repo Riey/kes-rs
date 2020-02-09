@@ -32,6 +32,12 @@ impl<'b, P: Printer> Interpreter<'b, P> {
         }
     }
 
+    #[inline]
+    pub fn bump(&self) -> &'b Bump {
+        self.bump
+    }
+
+
     pub fn insert_builtin(&mut self, name: &'b str, func: fn(&mut Context<'b, '_, P>)) {
         self.builtin.insert(name, func);
     }
