@@ -3,7 +3,7 @@ use crate::token::Token;
 
 fn is_ident_char(c: char) -> bool {
     match c {
-        '0'..='9' | 'a'..='z' | 'A'..='Z' | 'ㄱ'..='ㅎ' | 'ㅏ'..='ㅣ' | '가'..='힣' => true,
+        '_' |'0'..='9' | 'a'..='z' | 'A'..='Z' | 'ㄱ'..='ㅎ' | 'ㅏ'..='ㅣ' | '가'..='힣' => true,
         _ => false,
     }
 }
