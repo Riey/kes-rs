@@ -6,10 +6,17 @@ pub enum Token<'s> {
     Else,
     /// 선택
     Select,
+    /// 종료
+    Exit,
+    /// ''
     StrLit(&'s str),
+    /// 123
     IntLit(u32),
+    /// ABC
     Builtin(&'s str),
+    /// $ABC
     Variable(&'s str),
+    /// +-/*
     Operator(Operator),
     /// {
     OpenBrace,

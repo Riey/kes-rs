@@ -263,6 +263,10 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
 
     pub fn run_instruction(&mut self, inst: Instruction<'b>) -> bool {
         match inst {
+            Instruction::Exit => {
+                self.cursor = self.instructions.len();
+                return false;
+            }
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
             Instruction::LoadVar(name) => {

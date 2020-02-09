@@ -98,6 +98,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
             Token::Pop => self.push(Instruction::Pop),
+            Token::Exit => self.push(Instruction::Exit),
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
             Token::StrLit(text) => self.push(Instruction::LoadStr(self.intern(text))),
             Token::Variable(ident) => self.push(Instruction::LoadVar(self.intern(ident))),

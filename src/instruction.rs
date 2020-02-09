@@ -3,6 +3,7 @@ use crate::operator::Operator;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Instruction<'s> {
     Nop,
+    Exit,
     Pop,
     Duplicate,
     Conditional,

@@ -101,6 +101,8 @@ impl<'s> Lexer<'s> {
             Some(Token::Else)
         } else if self.try_strip_prefix("선택") {
             Some(Token::Select)
+        } else if self.try_strip_prefix("종료") {
+            Some(Token::Exit)
         } else if self.try_strip_prefix("[?]") {
             Some(Token::Conditional)
         } else if self.try_strip_prefix("[-]") {
