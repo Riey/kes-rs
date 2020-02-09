@@ -152,8 +152,8 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
 
         macro_rules! binop_bool {
             ($op:tt) => {
-                let rhs = self.pop_u32();
-                let lhs = self.pop_u32();
+                let rhs = self.pop_bool();
+                let lhs = self.pop_bool();
                 self.push(if lhs $op rhs {
                     1
                 } else {
@@ -192,6 +192,15 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
             }
             Operator::LessOrEqual => {
                 binop_bool!(<=);
+            }
+            Operator::And => {
+                binop_bool!(&);
+            }
+            Operator::Or => {
+                binop_bool!(|);
+            }
+            Operator::Xor => {
+                binop_bool!(^);
             }
             Operator::Not => {
                 let b = self.pop_bool();
@@ -235,15 +244,6 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
             }
             Operator::Rem => {
                 binop!(%);
-            }
-            Operator::And => {
-                binop!(&);
-            }
-            Operator::Or => {
-                binop!(|);
-            }
-            Operator::Xor => {
-                binop!(^);
             }
         }
     }
