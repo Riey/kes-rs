@@ -3,6 +3,10 @@ name = "kes"
 version = "0.0.1"
 authors = ["Riey <creeper844@gmail.com>"]
 edition = "2018"
+description = "Korean Era Script"
+license = "MIT"
+repository = "https://github.com/Riey/kes-rs"
+readme = "README.md"
 
 [[bench]]
 name = "parse"
