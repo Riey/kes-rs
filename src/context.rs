@@ -122,6 +122,11 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     }
 
     #[inline]
+    pub fn printer(&mut self) -> &mut P {
+        self.printer
+    }
+
+    #[inline]
     pub fn peek(&self) -> Option<&Value<'c>> {
         self.stack.last()
     }
