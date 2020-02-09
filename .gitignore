@@ -1,2 +1,4 @@
 /target
+/flamegraph*
+/perf*
 Cargo.lock
