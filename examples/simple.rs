@@ -1,6 +1,6 @@
-use kes::Interpreter;
-use kes::printer::DummyPrinter;
 use bumpalo::Bump;
+use kes::printer::DummyPrinter;
+use kes::Interpreter;
 
 fn main() {
     let bump = Bump::with_capacity(8196);
@@ -11,4 +11,3 @@ fn main() {
         interpreter.run_script("foo", &mut DummyPrinter);
     }
 }
-
