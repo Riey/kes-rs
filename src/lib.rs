@@ -9,15 +9,15 @@ pub mod token;
 use crate::context::Context;
 use crate::instruction::Instruction;
 use crate::printer::Printer;
+use ahash::AHashMap;
 use bumpalo::collections::{String, Vec};
 pub use bumpalo::Bump;
-use std::collections::HashMap;
 
 pub struct Interpreter<'b, P: Printer> {
     bump: &'b Bump,
     exe_bump: Bump,
-    builtin: HashMap<&'b str, fn(&mut Context<'b, '_, P>)>,
-    scripts: HashMap<&'b str, Vec<'b, Instruction<'b>>>,
+    builtin: AHashMap<&'b str, fn(&mut Context<'b, '_, P>)>,
+    scripts: AHashMap<&'b str, Vec<'b, Instruction<'b>>>,
     print_buffer: String<'b>,
 }
 
@@ -26,8 +26,8 @@ impl<'b, P: Printer> Interpreter<'b, P> {
         Self {
             bump,
             exe_bump: Bump::with_capacity(1024 * 1024),
-            builtin: HashMap::new(),
-            scripts: HashMap::new(),
+            builtin: AHashMap::new(),
+            scripts: AHashMap::new(),
             print_buffer: String::with_capacity_in(1024 * 10, bump),
         }
     }

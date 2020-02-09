@@ -1,9 +1,9 @@
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::printer::Printer;
+use ahash::AHashMap;
 use bumpalo::collections::{String, Vec};
 use bumpalo::Bump;
-use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Write};
 
@@ -82,19 +82,19 @@ impl<'b> TryFrom<Value<'b>> for u32 {
 
 pub struct Context<'b: 'c, 'c, P: Printer> {
     bump: &'c Bump,
-    builtin: &'c HashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
+    builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
     instructions: &'c [Instruction<'b>],
     printer: &'c mut P,
     print_buffer: &'c mut String<'b>,
     stack: Vec<'c, Value<'c>>,
-    variables: HashMap<&'c str, Value<'c>>,
+    variables: AHashMap<&'c str, Value<'c>>,
     cursor: usize,
 }
 
 impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     pub fn new(
         bump: &'c Bump,
-        builtin: &'c HashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
+        builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
         instructions: &'c [Instruction<'b>],
         printer: &'c mut P,
         print_buffer: &'c mut String<'b>,
@@ -106,7 +106,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
             stack: Vec::with_capacity_in(50, bump),
             printer,
             print_buffer,
-            variables: HashMap::new(),
+            variables: AHashMap::new(),
             cursor: 0,
         }
     }

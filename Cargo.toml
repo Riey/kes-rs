@@ -20,6 +20,7 @@ debug = true
 [dependencies]
 memchr = "2.3.0"
 bumpalo = { version = "3.2.0", features = ["collections"] }
+ahash = "0.3.2"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"

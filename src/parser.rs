@@ -3,6 +3,7 @@ use crate::operator::Operator;
 use crate::token::Token;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
+use std::vec::Vec as StdVec;
 
 #[derive(Clone, Copy)]
 enum State {
@@ -19,7 +20,7 @@ struct Parser<'s, 'b, I: Iterator<Item = Token<'s>>> {
     bump: &'b Bump,
     tokens: I,
     state: State,
-    stack: Vec<'b, State>,
+    stack: StdVec<State>,
     ret: Vec<'b, Instruction<'b>>,
 }
 
@@ -29,7 +30,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
             bump,
             tokens,
             state: State::Empty,
-            stack: Vec::with_capacity_in(20, bump),
+            stack: StdVec::with_capacity(20),
             ret: Vec::with_capacity_in(1000, bump),
         }
     }
