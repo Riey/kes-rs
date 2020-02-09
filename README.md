@@ -1,5 +1,8 @@
-# kes-rs
+# kes
 
+Rust implementation for Korean Era Script
+
+![Crates.io](https://img.shields.io/crates/v/kes?style=flat-square)
 [![Build Status](https://img.shields.io/github/workflow/status/riey/kes-rs/CI?label=build&style=flat-square)](https://github.com/Riey/kes-rs/actions)
 ![GitHub top language](https://img.shields.io/github/languages/top/riey/kes-rs?color=light-green&style=flat-square)
 ![GitHub last commit](https://img.shields.io/github/last-commit/riey/kes-rs?style=flat-square)
