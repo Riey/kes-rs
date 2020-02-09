@@ -21,6 +21,7 @@ impl<'b> Value<'b> {
 }
 
 impl<'b> fmt::Display for Value<'b> {
+    #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(num) => num.fmt(formatter),
@@ -70,6 +71,7 @@ pub struct ValueConvertError;
 impl<'b> TryFrom<Value<'b>> for u32 {
     type Error = ValueConvertError;
 
+    #[inline]
     fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n),
@@ -109,22 +111,27 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
         }
     }
 
+    #[inline]
     pub fn push(&mut self, v: impl Into<Value<'c>>) {
         self.stack.push(v.into());
     }
 
+    #[inline]
     pub fn pop(&mut self) -> Option<Value<'c>> {
         self.stack.pop()
     }
 
+    #[inline]
     pub fn peek(&self) -> Option<&Value<'c>> {
         self.stack.last()
     }
 
+    #[inline]
     fn pop_u32(&mut self) -> u32 {
         self.pop().unwrap().try_into().unwrap()
     }
 
+    #[inline]
     fn pop_bool(&mut self) -> bool {
         self.pop().unwrap().into()
     }
@@ -280,6 +287,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
         true
     }
 
+    #[inline]
     pub fn run_builtin(&mut self, name: &str) {
         self.builtin[name](self);
     }
