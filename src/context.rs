@@ -199,7 +199,30 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
                 self.push(if b { 1 } else { 0 });
             }
             Operator::Add => {
-                binop!(+);
+                let rhs = self.pop().unwrap();
+                let lhs = self.pop().unwrap();
+
+                self.push(match (lhs, rhs) {
+                    (Value::Int(l), Value::Int(r)) => Value::Int(l + r),
+                    (Value::Int(l), Value::Str(r)) => {
+                        let mut buf = String::with_capacity_in(r.len() + 10, self.bump);
+                        write!(&mut buf, "{}", l).unwrap();
+                        buf.push_str(r);
+                        Value::Str(buf.into_bump_str())
+                    }
+                    (Value::Str(l), Value::Int(r)) => {
+                        let mut buf = String::with_capacity_in(l.len() + 10, self.bump);
+                        buf.push_str(l);
+                        write!(&mut buf, "{}", r).unwrap();
+                        Value::Str(buf.into_bump_str())
+                    }
+                    (Value::Str(l), Value::Str(r)) => {
+                        let mut buf = String::with_capacity_in(l.len() + r.len(), self.bump);
+                        buf.push_str(l);
+                        buf.push_str(r);
+                        Value::Str(buf.into_bump_str())
+                    }
+                });
             }
             Operator::Sub => {
                 binop!(-);
