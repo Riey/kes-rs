@@ -132,12 +132,12 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     }
 
     #[inline]
-    fn pop_u32(&mut self) -> u32 {
+    pub fn pop_u32(&mut self) -> u32 {
         self.pop().unwrap().try_into().unwrap()
     }
 
     #[inline]
-    fn pop_bool(&mut self) -> bool {
+    pub fn pop_bool(&mut self) -> bool {
         self.pop().unwrap().into()
     }
 
