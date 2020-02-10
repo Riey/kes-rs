@@ -96,7 +96,7 @@ pub struct Context<'b: 'c, 'c, P: Printer> {
     bump: &'c Bump,
     builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
     instructions: &'c [Instruction<'c>],
-    printer: &'c mut P,
+    printer: P,
     print_buffer: &'c mut String<'b>,
     stack: Vec<'c, Value<'c>>,
     variables: AHashMap<&'c str, Value<'c>>,
@@ -108,7 +108,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
         bump: &'c Bump,
         builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
         instructions: &'c [Instruction<'b>],
-        printer: &'c mut P,
+        printer: P,
         print_buffer: &'c mut String<'b>,
     ) -> Self {
         Self {
@@ -135,7 +135,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
 
     #[inline]
     pub fn printer(&mut self) -> &mut P {
-        self.printer
+        &mut self.printer
     }
 
     #[inline]

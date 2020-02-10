@@ -13,20 +13,18 @@ use ahash::AHashMap;
 use bumpalo::collections::{String, Vec};
 pub use bumpalo::Bump;
 
-pub struct Interpreter<'b, P: Printer> {
+pub struct Interpreter<'b> {
     bump: &'b Bump,
     exe_bump: Bump,
-    builtin: AHashMap<&'b str, fn(&mut Context<'b, '_, P>)>,
     scripts: AHashMap<&'b str, Vec<'b, Instruction<'b>>>,
     print_buffer: String<'b>,
 }
 
-impl<'b, P: Printer> Interpreter<'b, P> {
+impl<'b> Interpreter<'b> {
     pub fn new(bump: &'b Bump) -> Self {
         Self {
             bump,
             exe_bump: Bump::with_capacity(1024 * 1024),
-            builtin: AHashMap::new(),
             scripts: AHashMap::new(),
             print_buffer: String::with_capacity_in(1024 * 10, bump),
         }
@@ -37,10 +35,6 @@ impl<'b, P: Printer> Interpreter<'b, P> {
         self.bump
     }
 
-    pub fn insert_builtin(&mut self, name: &'b str, func: fn(&mut Context<'b, '_, P>)) {
-        self.builtin.insert(name, func);
-    }
-
     pub fn load_script(&mut self, name: &'b str, source: &str) {
         self.scripts.insert(
             name,
@@ -48,11 +42,11 @@ impl<'b, P: Printer> Interpreter<'b, P> {
         );
     }
 
-    pub fn run_script(&mut self, name: &str, printer: &mut P) -> bool {
+    pub fn run_script<P: Printer>(&mut self, builtin: &AHashMap<&'b str, fn(&mut Context<'b, '_, P>)>, name: &str, printer: P) -> bool {
         if let Some(script) = self.scripts.get(name) {
             let ctx = crate::context::Context::new(
                 &self.exe_bump,
-                &self.builtin,
+                builtin,
                 script,
                 printer,
                 &mut self.print_buffer,
@@ -66,12 +60,12 @@ impl<'b, P: Printer> Interpreter<'b, P> {
         }
     }
 
-    pub fn eval(&mut self, source: &str, printer: &mut P) {
+    pub fn eval<P: Printer>(&mut self, builtin: &AHashMap<&'b str, fn(&mut Context<'b, '_, P>)>, source: &str, printer: P) {
         let bump = &self.exe_bump;
         let script = crate::parser::parse(&self.bump, crate::lexer::lex(source));
         let ctx = crate::context::Context::new(
             bump,
-            &self.builtin,
+            &builtin,
             &script,
             printer,
             &mut self.print_buffer,
@@ -98,7 +92,7 @@ $4
     );
     let mut printer = RecordPrinter::new();
 
-    let ret = interpreter.run_script("foo", &mut printer);
+    let ret = interpreter.run_script(&Default::default(), "foo", &mut printer);
 
     assert!(ret);
     assert_eq!(printer.text(), "21 + 2 = 3\n#8");

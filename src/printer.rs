@@ -3,6 +3,17 @@ pub trait Printer {
     fn wait(&mut self);
 }
 
+impl<'a, P: Printer> Printer for &'a mut P {
+    #[inline(always)]
+    fn print(&mut self, text: &str) {
+        (**self).print(text);
+    }
+    #[inline(always)]
+    fn wait(&mut self) {
+        (**self).wait();
+    }
+}
+
 pub struct DummyPrinter;
 
 impl Printer for DummyPrinter {
