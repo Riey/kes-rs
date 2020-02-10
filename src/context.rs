@@ -95,7 +95,7 @@ impl<'b> TryFrom<Value<'b>> for &'b str {
 pub struct Context<'b: 'c, 'c, P: Printer> {
     bump: &'c Bump,
     builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
-    instructions: &'c [Instruction<'b>],
+    instructions: &'c [Instruction<'c>],
     printer: &'c mut P,
     print_buffer: &'c mut String<'b>,
     stack: Vec<'c, Value<'c>>,
@@ -278,7 +278,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
         self.bump
     }
 
-    pub fn run_instruction(&mut self, inst: Instruction<'b>) -> bool {
+    pub fn run_instruction(&mut self, inst: Instruction<'c>) -> bool {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();

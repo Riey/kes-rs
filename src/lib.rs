@@ -65,6 +65,21 @@ impl<'b, P: Printer> Interpreter<'b, P> {
             false
         }
     }
+
+    pub fn eval(&mut self, source: &str, printer: &mut P) {
+        let bump = &self.exe_bump;
+        let script = crate::parser::parse(&self.bump, crate::lexer::lex(source));
+        let ctx = crate::context::Context::new(
+            bump,
+            &self.builtin,
+            &script,
+            printer,
+            &mut self.print_buffer,
+        );
+        ctx.run();
+        self.print_buffer.clear();
+        self.exe_bump.reset();
+    }
 }
 
 #[test]
