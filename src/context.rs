@@ -80,6 +80,18 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     }
 }
 
+impl<'b> TryFrom<Value<'b>> for &'b str {
+    type Error = ValueConvertError;
+
+    #[inline]
+    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
+        match v {
+            Value::Str(s) => Ok(s),
+            _ => Err(ValueConvertError),
+        }
+    }
+}
+
 pub struct Context<'b: 'c, 'c, P: Printer> {
     bump: &'c Bump,
     builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
@@ -139,6 +151,11 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     #[inline]
     pub fn pop_bool(&mut self) -> bool {
         self.pop().unwrap().into()
+    }
+
+    #[inline]
+    pub fn pop_str(&mut self) -> &'c str {
+        self.pop().unwrap().try_into().unwrap()
     }
 
     pub fn run_operator(&mut self, op: Operator) {
