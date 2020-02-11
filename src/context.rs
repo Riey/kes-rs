@@ -81,6 +81,18 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     }
 }
 
+impl<'b> TryFrom<Value<'b>> for usize {
+    type Error = ValueConvertError;
+
+    #[inline]
+    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
+        match v {
+            Value::Int(n) => Ok(n as usize),
+            _ => Err(ValueConvertError),
+        }
+    }
+}
+
 impl<'b> TryFrom<Value<'b>> for &'b str {
     type Error = ValueConvertError;
 

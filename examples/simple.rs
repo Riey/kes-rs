@@ -1,13 +1,18 @@
-use bumpalo::Bump;
 use kes::builtin::DummyBuiltin;
 use kes::printer::DummyPrinter;
-use kes::Interpreter;
+use kes::context::Context;
+use kes::lexer::lex;
+use kes::parser::parse;
+use kes::bumpalo::{Bump, collections::String};
 
 fn main() {
     let bump = Bump::with_capacity(8196);
-    let mut interpreter = Interpreter::new(&bump);
-    interpreter.load_script("foo", "1 2 + 3 - 0 <> '1' [-]");
+    let script = parse(&bump, lex("1 2 + 3 - 0 <> '1' [-]"));
+    let mut buf = String::with_capacity_in(1024, &bump);
+
+
     for _ in 0..1000000 {
-        interpreter.run_script(DummyBuiltin, "foo", DummyPrinter);
+        let ctx = Context::new(&bump, &script, DummyPrinter, &mut buf);
+        ctx.run(DummyBuiltin);
     }
 }
