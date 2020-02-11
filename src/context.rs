@@ -66,6 +66,13 @@ impl<'b> From<&'b str> for Value<'b> {
     }
 }
 
+impl<'b> From<&'b mut str> for Value<'b> {
+    #[inline]
+    fn from(s: &'b mut str) -> Self {
+        Value::Str(s)
+    }
+}
+
 #[derive(Debug)]
 pub struct ValueConvertError;
 
