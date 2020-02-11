@@ -1,3 +1,4 @@
+pub mod builtin;
 pub mod context;
 pub mod instruction;
 pub mod lexer;
@@ -6,9 +7,9 @@ pub mod parser;
 pub mod printer;
 pub mod token;
 
-use crate::context::Context;
+use crate::builtin::Builtin;
 use crate::instruction::Instruction;
-use crate::printer::Printer;
+use crate::{context::Context, printer::Printer};
 use ahash::AHashMap;
 use bumpalo::collections::{String, Vec};
 pub use bumpalo::Bump;
@@ -42,16 +43,15 @@ impl<'b> Interpreter<'b> {
         );
     }
 
-    pub fn run_script<P: Printer>(&mut self, builtin: &AHashMap<&'b str, fn(&mut Context<'b, '_, P>)>, name: &str, printer: P) -> bool {
+    pub fn run_script<B: Builtin, P: Printer>(
+        &mut self,
+        builtin: B,
+        name: &str,
+        printer: P,
+    ) -> bool {
         if let Some(script) = self.scripts.get(name) {
-            let ctx = crate::context::Context::new(
-                &self.exe_bump,
-                builtin,
-                script,
-                printer,
-                &mut self.print_buffer,
-            );
-            ctx.run();
+            let ctx = Context::new(&self.exe_bump, script, printer, &mut self.print_buffer);
+            ctx.run(builtin);
             self.print_buffer.clear();
             self.exe_bump.reset();
             true
@@ -60,17 +60,11 @@ impl<'b> Interpreter<'b> {
         }
     }
 
-    pub fn eval<P: Printer>(&mut self, builtin: &AHashMap<&'b str, fn(&mut Context<'b, '_, P>)>, source: &str, printer: P) {
+    pub fn eval<B: Builtin, P: Printer>(&mut self, builtin: &mut B, source: &str, printer: P) {
         let bump = &self.exe_bump;
         let script = crate::parser::parse(&self.bump, crate::lexer::lex(source));
-        let ctx = crate::context::Context::new(
-            bump,
-            &builtin,
-            &script,
-            printer,
-            &mut self.print_buffer,
-        );
-        ctx.run();
+        let ctx = Context::new(bump, &script, printer, &mut self.print_buffer);
+        ctx.run(builtin);
         self.print_buffer.clear();
         self.exe_bump.reset();
     }
@@ -78,6 +72,7 @@ impl<'b> Interpreter<'b> {
 
 #[test]
 fn interpreter_run_test() {
+    use crate::builtin::DummyBuiltin;
     use crate::printer::RecordPrinter;
     let bump = Bump::with_capacity(8196);
     let mut interpreter = Interpreter::new(&bump);
@@ -92,7 +87,7 @@ $4
     );
     let mut printer = RecordPrinter::new();
 
-    let ret = interpreter.run_script(&Default::default(), "foo", &mut printer);
+    let ret = interpreter.run_script(DummyBuiltin, "foo", &mut printer);
 
     assert!(ret);
     assert_eq!(printer.text(), "21 + 2 = 3\n#8");

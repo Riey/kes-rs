@@ -24,19 +24,23 @@ impl Printer for DummyPrinter {
 pub struct RecordPrinter(String);
 
 impl RecordPrinter {
+    #[inline(always)]
     pub fn new() -> Self {
         Self(String::with_capacity(8196))
     }
 
+    #[inline(always)]
     pub fn text(&self) -> &str {
         &self.0
     }
 }
 
 impl Printer for RecordPrinter {
+    #[inline(always)]
     fn print(&mut self, text: &str) {
         self.0 += text;
     }
+    #[inline(always)]
     fn wait(&mut self) {
         self.0.push('#');
     }

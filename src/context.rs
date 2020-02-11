@@ -1,3 +1,4 @@
+use crate::builtin::Builtin;
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::printer::Printer;
@@ -93,27 +94,24 @@ impl<'b> TryFrom<Value<'b>> for &'b str {
 }
 
 pub struct Context<'b: 'c, 'c, P: Printer> {
-    bump: &'c Bump,
-    builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
-    instructions: &'c [Instruction<'c>],
-    printer: P,
-    print_buffer: &'c mut String<'b>,
-    stack: Vec<'c, Value<'c>>,
-    variables: AHashMap<&'c str, Value<'c>>,
+    pub bump: &'c Bump,
+    pub instructions: &'c [Instruction<'c>],
+    pub printer: P,
+    pub print_buffer: &'c mut String<'b>,
+    pub stack: Vec<'c, Value<'c>>,
+    pub variables: AHashMap<&'c str, Value<'c>>,
     cursor: usize,
 }
 
 impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     pub fn new(
         bump: &'c Bump,
-        builtin: &'c AHashMap<&'b str, fn(&mut Context<'b, 'c, P>)>,
         instructions: &'c [Instruction<'b>],
         printer: P,
         print_buffer: &'c mut String<'b>,
     ) -> Self {
         Self {
             bump,
-            builtin,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             printer,
@@ -134,8 +132,11 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     }
 
     #[inline]
-    pub fn printer(&mut self) -> &mut P {
-        &mut self.printer
+    pub fn pop_into<T: TryFrom<Value<'c>>>(&mut self) -> T
+    where
+        T::Error: std::fmt::Debug,
+    {
+        self.pop().unwrap().try_into().unwrap()
     }
 
     #[inline]
@@ -145,17 +146,17 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
 
     #[inline]
     pub fn pop_u32(&mut self) -> u32 {
-        self.pop().unwrap().try_into().unwrap()
+        self.pop_into()
     }
 
     #[inline]
     pub fn pop_bool(&mut self) -> bool {
-        self.pop().unwrap().into()
+        self.pop_into()
     }
 
     #[inline]
     pub fn pop_str(&mut self) -> &'c str {
-        self.pop().unwrap().try_into().unwrap()
+        self.pop_into()
     }
 
     pub fn run_operator(&mut self, op: Operator) {
@@ -278,7 +279,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
         self.bump
     }
 
-    pub fn run_instruction(&mut self, inst: Instruction<'c>) -> bool {
+    pub fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) -> bool {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
@@ -294,7 +295,7 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
                 let item = self.pop().unwrap();
                 self.variables.insert(name, item);
             }
-            Instruction::CallBuiltin(name) => self.run_builtin(name),
+            Instruction::CallBuiltin(name) => builtin.run(name, self),
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
                 self.cursor = pos;
@@ -336,14 +337,9 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
         true
     }
 
-    #[inline]
-    pub fn run_builtin(&mut self, name: &str) {
-        self.builtin[name](self);
-    }
-
-    pub fn run(mut self) {
+    pub fn run<B: Builtin>(mut self, mut builtin: B) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            if self.run_instruction(instruction) {
+            if self.run_instruction(&mut builtin, instruction) {
                 self.cursor += 1;
             }
         }
