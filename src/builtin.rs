@@ -16,6 +16,5 @@ pub struct DummyBuiltin;
 
 impl Builtin for DummyBuiltin {
     #[inline(always)]
-    fn run<P: Printer>(&mut self, _name: &str, _ctx: &mut Context<P>) { }
+    fn run<P: Printer>(&mut self, _name: &str, _ctx: &mut Context<P>) {}
 }
-
