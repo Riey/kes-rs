@@ -122,11 +122,7 @@ pub struct Context<'c, P: Printer> {
 }
 
 impl<'c, P: Printer> Context<'c, P> {
-    pub fn new(
-        bump: &'c Bump,
-        instructions: &'c [Instruction<'c>],
-        printer: P,
-    ) -> Self {
+    pub fn new(bump: &'c Bump, instructions: &'c [Instruction<'c>], printer: P) -> Self {
         Self {
             bump,
             instructions,
@@ -323,12 +319,12 @@ impl<'c, P: Printer> Context<'c, P> {
                 return false;
             }
             Instruction::NewLine => {
-                self.push("\n");
                 self.flush_print();
+                self.printer.new_line();
             }
             Instruction::Wait => {
-                self.push("\n");
                 self.flush_print();
+                self.printer.new_line();
                 self.printer.wait();
             }
             Instruction::Duplicate => {
