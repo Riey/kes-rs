@@ -112,29 +112,26 @@ impl<'b> TryFrom<Value<'b>> for &'b str {
     }
 }
 
-pub struct Context<'b: 'c, 'c, P: Printer> {
+pub struct Context<'c, P: Printer> {
     pub bump: &'c Bump,
     pub instructions: &'c [Instruction<'c>],
     pub printer: P,
-    pub print_buffer: &'c mut String<'b>,
     pub stack: Vec<'c, Value<'c>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
     cursor: usize,
 }
 
-impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
+impl<'c, P: Printer> Context<'c, P> {
     pub fn new(
         bump: &'c Bump,
-        instructions: &'c [Instruction<'b>],
+        instructions: &'c [Instruction<'c>],
         printer: P,
-        print_buffer: &'c mut String<'b>,
     ) -> Self {
         Self {
             bump,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             printer,
-            print_buffer,
             variables: AHashMap::new(),
             cursor: 0,
         }
@@ -286,11 +283,9 @@ impl<'b: 'c, 'c, P: Printer> Context<'b, 'c, P> {
     }
 
     pub fn flush_print(&mut self) {
-        self.print_buffer.clear();
         for v in self.stack.drain(..) {
-            write!(&mut self.print_buffer, "{}", v).unwrap();
+            self.printer.print(v);
         }
-        self.printer.print(&self.print_buffer);
     }
 
     #[inline(always)]

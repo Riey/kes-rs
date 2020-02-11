@@ -1,12 +1,14 @@
+use crate::context::Value;
+
 pub trait Printer {
-    fn print(&mut self, text: &str);
+    fn print(&mut self, v: Value);
     fn wait(&mut self);
 }
 
 impl<'a, P: Printer> Printer for &'a mut P {
     #[inline(always)]
-    fn print(&mut self, text: &str) {
-        (**self).print(text);
+    fn print(&mut self, v: Value) {
+        (**self).print(v);
     }
     #[inline(always)]
     fn wait(&mut self) {
@@ -17,7 +19,7 @@ impl<'a, P: Printer> Printer for &'a mut P {
 pub struct DummyPrinter;
 
 impl Printer for DummyPrinter {
-    fn print(&mut self, _: &str) {}
+    fn print(&mut self, _: Value) {}
     fn wait(&mut self) {}
 }
 
@@ -37,8 +39,9 @@ impl RecordPrinter {
 
 impl Printer for RecordPrinter {
     #[inline(always)]
-    fn print(&mut self, text: &str) {
-        self.0 += text;
+    fn print(&mut self, v: Value) {
+        use std::fmt::Write;
+        write!(self.0, "{}", v).unwrap();
     }
     #[inline(always)]
     fn wait(&mut self) {
