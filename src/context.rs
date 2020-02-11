@@ -289,11 +289,11 @@ impl<'c, P: Printer> Context<'c, P> {
         self.bump
     }
 
-    pub fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) -> bool {
+    pub fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
-                return false;
+                return;
             }
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
@@ -309,14 +309,13 @@ impl<'c, P: Printer> Context<'c, P> {
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
                 self.cursor = pos;
-                return false;
+                return;
             }
             Instruction::GotoIfNot(pos) => {
                 if !self.pop().unwrap().into_bool() {
                     self.cursor = pos;
+                    return;
                 }
-
-                return false;
             }
             Instruction::NewLine => {
                 self.flush_print();
@@ -344,17 +343,14 @@ impl<'c, P: Printer> Context<'c, P> {
             }
         }
 
-        true
+        self.cursor += 1;
     }
 
     pub fn run<B: Builtin>(mut self, mut builtin: B) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            if self.run_instruction(&mut builtin, instruction) {
-                self.cursor += 1;
-            }
+            self.run_instruction(&mut builtin, instruction);
         }
 
         self.flush_print();
-        self.cursor = 0;
     }
 }
