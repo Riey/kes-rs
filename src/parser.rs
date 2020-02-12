@@ -77,9 +77,9 @@ impl<'s, 'b> Parser<'s, 'b> {
     }
 
     fn read_select_arm(&mut self, prev_end: usize) {
-        self.backup_state();
         match self.lexer.next().unwrap() {
             token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
+                self.backup_state();
                 self.push(Instruction::Duplicate);
                 self.step(token);
                 self.push(Instruction::Operator(Operator::Equal));
@@ -87,7 +87,13 @@ impl<'s, 'b> Parser<'s, 'b> {
                 self.push(Instruction::Nop);
             }
             Token::Else => {
+                self.backup_state();
                 self.set_state(State::SelectElse(prev_end));
+            }
+            Token::CloseBrace => {
+                // Select ended without else
+                self.step(Token::CloseBrace);
+                return;
             }
             token => panic!("Unexpected token, line: {}, {:?}", self.lexer.line(), token),
         }
@@ -467,6 +473,21 @@ fn parse_select_without_else() {
 }
 ");
 
-    assert_eq!(&instructions, &[]);
+    assert_eq!(&instructions, &[
+        Instruction::LoadInt(1),
+        Instruction::Duplicate,
+        Instruction::LoadInt(1),
+        Instruction::Operator(Operator::Equal),
+        Instruction::GotoIfNot(7),
+        Instruction::LoadInt(2),
+        Instruction::Goto(12),
+        Instruction::Duplicate,
+        Instruction::LoadInt(2),
+        Instruction::Operator(Operator::Equal),
+        Instruction::GotoIfNot(13),
+        Instruction::LoadInt(3),
+        Instruction::Nop,
+        Instruction::Pop,
+    ]);
 }
 
