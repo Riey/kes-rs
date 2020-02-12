@@ -17,6 +17,9 @@ harness = false
 [profile.release]
 debug = true
 
+[features]
+debug-info = []
+
 [dependencies]
 memchr = "2.3.0"
 bumpalo = { version = "3.2.0", features = ["collections"] }

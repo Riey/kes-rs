@@ -16,14 +16,45 @@ fn is_not_ident_char(c: char) -> bool {
 
 pub struct Lexer<'s> {
     text: &'s str,
+    #[cfg(features = "debug-info")]
+    line: usize,
 }
 
 impl<'s> Lexer<'s> {
+    pub fn new(text: &'s str) -> Self {
+        #[cfg(features = "debug-info")] {
+            Self {
+                text,
+                line: 0,
+            }
+        }
+        #[cfg(not(features = "debug-info"))] {
+            Self {
+                text,
+            }
+        }
+    }
+
+    pub fn line(&self) -> usize {
+        #[cfg(features = "debug-info")] {
+            self.line
+        }
+        #[cfg(not(features = "debug-info"))] {
+            0
+        }
+    }
+
     fn skip_ws(&mut self) {
         loop {
             match self.text.as_bytes().get(0) {
-                Some(b' ') | Some(b'\n') => {
-                    self.text = self.text.trim_start_matches([' ', '\n'].as_ref());
+                Some(b'\n') => {
+                    self.text = unsafe { self.text.get_unchecked(1..) };
+                    #[cfg(features = "debug-info")] {
+                        self.line += 1;
+                    }
+                }
+                Some(b' ') => {
+                    self.text = self.text.trim_start_matches(' ');
                 }
                 Some(b';') => {
                     let pos =
@@ -191,20 +222,16 @@ impl<'s> Iterator for Lexer<'s> {
     }
 }
 
-pub fn lex<'s>(text: &'s str) -> Lexer<'s> {
-    Lexer { text }
-}
-
 #[test]
 fn lex_test() {
     use pretty_assertions::assert_eq;
-    let mut ts = lex("'ABC'#");
+    let mut ts = Lexer::new("'ABC'#");
 
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap(), Token::Sharp,);
     assert!(ts.text.is_empty());
 
-    ts = lex("[?][-][+][$123]");
+    ts = Lexer::new("[?][-][+][$123]");
 
     assert_eq!(ts.next().unwrap(), Token::Conditional,);
     assert_eq!(ts.next().unwrap(), Token::Pop,);
@@ -212,7 +239,7 @@ fn lex_test() {
     assert_eq!(ts.next().unwrap(), Token::Assign("123"),);
     assert!(ts.text.is_empty());
 
-    ts = lex("'ABC' @");
+    ts = Lexer::new("'ABC' @");
     assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap(), Token::At,);
     assert!(ts.text.is_empty());

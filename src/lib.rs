@@ -1,7 +1,9 @@
+#![feature(stmt_expr_attributes)]
+
 pub mod builtin;
 pub mod context;
 pub mod instruction;
-pub mod lexer;
+mod lexer;
 pub mod operator;
 pub mod parser;
 pub mod printer;

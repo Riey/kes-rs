@@ -1,6 +1,7 @@
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::token::Token;
+use crate::lexer::Lexer;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 use std::vec::Vec as StdVec;
@@ -16,19 +17,19 @@ enum State {
     SelectArm(usize, usize),
 }
 
-struct Parser<'s, 'b, I: Iterator<Item = Token<'s>>> {
+struct Parser<'s, 'b> {
     bump: &'b Bump,
-    tokens: I,
+    lexer: Lexer<'s>,
     state: State,
     stack: StdVec<State>,
     ret: Vec<'b, Instruction<'b>>,
 }
 
-impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
-    fn new(bump: &'b Bump, tokens: I) -> Self {
+impl<'s, 'b> Parser<'s, 'b> {
+    fn new(bump: &'b Bump, source: &'s str) -> Self {
         Self {
             bump,
-            tokens,
+            lexer: Lexer::new(source),
             state: State::Empty,
             stack: StdVec::with_capacity(20),
             ret: Vec::with_capacity_in(1000, bump),
@@ -66,7 +67,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
 
     fn move_next_open_brace(&mut self) {
         loop {
-            match self.tokens.next().unwrap() {
+            match self.lexer.next().unwrap() {
                 Token::OpenBrace => {
                     break;
                 }
@@ -77,7 +78,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
 
     fn read_select_arm(&mut self, prev_end: usize) {
         self.backup_state();
-        match self.tokens.next().unwrap() {
+        match self.lexer.next().unwrap() {
             token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
                 self.push(Instruction::Duplicate);
                 self.step(token);
@@ -88,10 +89,10 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
             Token::Else => {
                 self.set_state(State::SelectElse(prev_end));
             }
-            token => panic!("Unexpected token {:?}", token),
+            token => panic!("Unexpected token, line: {}, {:?}", self.lexer.line(), token),
         }
 
-        assert_eq!(self.tokens.next(), Some(Token::OpenBrace));
+        assert_eq!(self.lexer.next(), Some(Token::OpenBrace));
     }
 
     fn step(&mut self, token: Token<'s>) {
@@ -130,7 +131,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
             Token::CloseBrace => {
                 let pos = self.next_pos();
                 match self.state {
-                    State::Empty => panic!("Unexpected block close, {:?}", self.ret),
+                    State::Empty => panic!("Unexpected block close, line: {}, {:?}", self.lexer.line(), self.ret),
                     State::ElseIf(if_end, top) => {
                         self.ret[if_end] = Instruction::Goto(pos + 1);
                         self.set_state(State::If(top));
@@ -156,9 +157,9 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
                         }
                     }
                     State::If(top) => {
-                        match self.tokens.next() {
+                        match self.lexer.next() {
                             Some(Token::Else) => {
-                                match self.tokens.next().unwrap() {
+                                match self.lexer.next().unwrap() {
                                     // Else
                                     Token::OpenBrace => {
                                         self.ret[top] = Instruction::GotoIfNot(pos + 1);
@@ -199,7 +200,7 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
     }
 
     fn parse(mut self) -> Vec<'b, Instruction<'b>> {
-        while let Some(token) = self.tokens.next() {
+        while let Some(token) = self.lexer.next() {
             self.step(token);
         }
 
@@ -207,26 +208,25 @@ impl<'s, 'b, I: Iterator<Item = Token<'s>>> Parser<'s, 'b, I> {
     }
 }
 
-pub fn parse<'b, 's, I: Iterator<Item = Token<'s>>>(
+pub fn parse<'b>(
     bump: &'b Bump,
-    tokens: I,
+    source: &str,
 ) -> Vec<'b, Instruction<'b>> {
-    Parser::new(bump, tokens).parse()
+    Parser::new(bump, source).parse()
 }
 
 #[test]
 fn parse_condition() {
-    use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
 
     let instructions = parse(
         &bump,
-        lex("
+        "
 5 [$0]
 $0 2 % '$0은 짝수' '$0은 홀수' [?]
-"),
+",
     );
 
     assert_eq!(
@@ -246,16 +246,15 @@ $0 2 % '$0은 짝수' '$0은 홀수' [?]
 
 #[test]
 fn parse_assign() {
-    use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
 
     let instructions = parse(
         &bump,
-        lex("
+        "
 1 2 + [$1]
-"),
+"
     );
 
     assert_eq!(
@@ -271,19 +270,18 @@ fn parse_assign() {
 
 #[test]
 fn parse_if_test() {
-    use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
 
     let instructions = parse(
         &bump,
-        lex("
+        "
 1 2 < {
     '1은 2보다 작다'@
 }
 '3 + 4 = ' 3 4 + @
-"),
+"
     );
 
     assert_eq!(
@@ -306,14 +304,13 @@ fn parse_if_test() {
 
 #[test]
 fn parse_if_else_test() {
-    use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
 
     let instructions = parse(
         &bump,
-        lex("
+        "
 1 2 < {
     '1은 2보다 작다'@
 } 그외 2 2 == {
@@ -324,7 +321,7 @@ fn parse_if_else_test() {
     '1은 2와 같다'@
 }
 'foo'@
-"),
+"
     );
 
     assert_eq!(
@@ -361,21 +358,20 @@ fn parse_if_else_test() {
 
 #[test]
 fn parse_select_else() {
-    use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
 
     let instructions = parse(
         &bump,
-        lex("
+        "
 선택 1 {
     그외 {
         ''@
     }
 }
 ''@
-"),
+"
     );
 
     assert_eq!(
@@ -393,14 +389,13 @@ fn parse_select_else() {
 
 #[test]
 fn parse_select() {
-    use crate::lexer::lex;
     use pretty_assertions::assert_eq;
 
     let bump = Bump::new();
 
     let instructions = parse(
         &bump,
-        lex("
+        "
 선택 1 2 + {
     3 {
         '3'@
@@ -416,7 +411,7 @@ fn parse_select() {
     }
 }
 'foo'@
-"),
+"
     );
 
     assert_eq!(
