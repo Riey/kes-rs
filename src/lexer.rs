@@ -16,30 +16,29 @@ fn is_not_ident_char(c: char) -> bool {
 
 pub struct Lexer<'s> {
     text: &'s str,
-    #[cfg(features = "debug-info")]
+    #[cfg(feature = "debug-info")]
     line: usize,
 }
 
 impl<'s> Lexer<'s> {
     pub fn new(text: &'s str) -> Self {
-        #[cfg(features = "debug-info")] {
-            Self {
-                text,
-                line: 0,
-            }
+        #[cfg(feature = "debug-info")]
+        {
+            Self { text, line: 0 }
         }
-        #[cfg(not(features = "debug-info"))] {
-            Self {
-                text,
-            }
+        #[cfg(not(feature = "debug-info"))]
+        {
+            Self { text }
         }
     }
 
     pub fn line(&self) -> usize {
-        #[cfg(features = "debug-info")] {
+        #[cfg(feature = "debug-info")]
+        {
             self.line
         }
-        #[cfg(not(features = "debug-info"))] {
+        #[cfg(not(feature = "debug-info"))]
+        {
             0
         }
     }
@@ -49,7 +48,8 @@ impl<'s> Lexer<'s> {
             match self.text.as_bytes().get(0) {
                 Some(b'\n') => {
                     self.text = unsafe { self.text.get_unchecked(1..) };
-                    #[cfg(features = "debug-info")] {
+                    #[cfg(feature = "debug-info")]
+                    {
                         self.line += 1;
                     }
                 }
@@ -61,6 +61,10 @@ impl<'s> Lexer<'s> {
                         memchr::memchr(b'\n', self.text.as_bytes()).unwrap_or(self.text.len());
                     unsafe {
                         self.text = self.text.get_unchecked(pos..);
+                    }
+                    #[cfg(feature = "debug-info")]
+                    {
+                        self.line += 1;
                     }
                 }
                 _ => break,

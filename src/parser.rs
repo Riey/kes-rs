@@ -1,7 +1,7 @@
 use crate::instruction::Instruction;
+use crate::lexer::Lexer;
 use crate::operator::Operator;
 use crate::token::Token;
-use crate::lexer::Lexer;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 use std::vec::Vec as StdVec;
@@ -131,7 +131,11 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::CloseBrace => {
                 let pos = self.next_pos();
                 match self.state {
-                    State::Empty => panic!("Unexpected block close, line: {}, {:?}", self.lexer.line(), self.ret),
+                    State::Empty => panic!(
+                        "Unexpected block close, line: {}, {:?}",
+                        self.lexer.line(),
+                        self.ret
+                    ),
                     State::ElseIf(if_end, top) => {
                         self.ret[if_end] = Instruction::Goto(pos + 1);
                         self.set_state(State::If(top));
@@ -208,10 +212,7 @@ impl<'s, 'b> Parser<'s, 'b> {
     }
 }
 
-pub fn parse<'b>(
-    bump: &'b Bump,
-    source: &str,
-) -> Vec<'b, Instruction<'b>> {
+pub fn parse<'b>(bump: &'b Bump, source: &str) -> Vec<'b, Instruction<'b>> {
     Parser::new(bump, source).parse()
 }
 
@@ -254,7 +255,7 @@ fn parse_assign() {
         &bump,
         "
 1 2 + [$1]
-"
+",
     );
 
     assert_eq!(
@@ -281,7 +282,7 @@ fn parse_if_test() {
     '1은 2보다 작다'@
 }
 '3 + 4 = ' 3 4 + @
-"
+",
     );
 
     assert_eq!(
@@ -321,7 +322,7 @@ fn parse_if_else_test() {
     '1은 2와 같다'@
 }
 'foo'@
-"
+",
     );
 
     assert_eq!(
@@ -371,7 +372,7 @@ fn parse_select_else() {
     }
 }
 ''@
-"
+",
     );
 
     assert_eq!(
@@ -411,7 +412,7 @@ fn parse_select() {
     }
 }
 'foo'@
-"
+",
     );
 
     assert_eq!(
