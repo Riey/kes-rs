@@ -2,115 +2,12 @@ use crate::builtin::Builtin;
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::printer::Printer;
+use crate::value::Value;
 use ahash::AHashMap;
 use bumpalo::collections::{String, Vec};
 use bumpalo::Bump;
 use std::convert::{TryFrom, TryInto};
-use std::fmt::{self, Write};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Value<'b> {
-    Int(u32),
-    Str(&'b str),
-}
-
-impl<'b> Value<'b> {
-    #[inline]
-    pub fn into_bool(self) -> bool {
-        self.into()
-    }
-}
-
-impl<'b> fmt::Display for Value<'b> {
-    #[inline]
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Value::Int(num) => num.fmt(formatter),
-            Value::Str(str) => formatter.write_str(str),
-        }
-    }
-}
-
-impl<'b> From<bool> for Value<'b> {
-    #[inline]
-    fn from(b: bool) -> Self {
-        if b {
-            Value::Int(1)
-        } else {
-            Value::Int(0)
-        }
-    }
-}
-
-impl<'b> From<Value<'b>> for bool {
-    #[inline]
-    fn from(v: Value) -> Self {
-        match v {
-            Value::Int(0) | Value::Str("") => false,
-            _ => true,
-        }
-    }
-}
-
-impl<'b> From<u32> for Value<'b> {
-    #[inline]
-    fn from(n: u32) -> Self {
-        Value::Int(n)
-    }
-}
-
-impl<'b> From<&'b str> for Value<'b> {
-    #[inline]
-    fn from(s: &'b str) -> Self {
-        Value::Str(s)
-    }
-}
-
-impl<'b> From<&'b mut str> for Value<'b> {
-    #[inline]
-    fn from(s: &'b mut str) -> Self {
-        Value::Str(s)
-    }
-}
-
-#[derive(Debug)]
-pub struct ValueConvertError;
-
-impl<'b> TryFrom<Value<'b>> for u32 {
-    type Error = ValueConvertError;
-
-    #[inline]
-    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
-        match v {
-            Value::Int(n) => Ok(n),
-            _ => Err(ValueConvertError),
-        }
-    }
-}
-
-impl<'b> TryFrom<Value<'b>> for usize {
-    type Error = ValueConvertError;
-
-    #[inline]
-    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
-        match v {
-            Value::Int(n) => Ok(n as usize),
-            _ => Err(ValueConvertError),
-        }
-    }
-}
-
-impl<'b> TryFrom<Value<'b>> for &'b str {
-    type Error = ValueConvertError;
-
-    #[inline]
-    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
-        match v {
-            Value::Str(s) => Ok(s),
-            _ => Err(ValueConvertError),
-        }
-    }
-}
+use std::fmt::Write;
 
 pub struct Context<'c, P: Printer> {
     pub bump: &'c Bump,
