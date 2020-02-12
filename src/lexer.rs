@@ -24,7 +24,7 @@ impl<'s> Lexer<'s> {
     pub fn new(text: &'s str) -> Self {
         #[cfg(feature = "debug-info")]
         {
-            Self { text, line: 0 }
+            Self { text, line: 1 }
         }
         #[cfg(not(feature = "debug-info"))]
         {
