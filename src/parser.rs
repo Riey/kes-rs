@@ -450,3 +450,23 @@ fn parse_select() {
         ]
     );
 }
+
+#[test]
+fn parse_select_without_else() {
+    use pretty_assertions::assert_eq;
+    
+    let bump = Bump::with_capacity(8196);
+    let instructions = parse(&bump, "
+선택 1 {
+    1 {
+        2
+    }
+    2 {
+        3
+    }
+}
+");
+
+    assert_eq!(&instructions, &[]);
+}
+
