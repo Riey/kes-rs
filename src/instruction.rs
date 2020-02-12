@@ -17,4 +17,6 @@ pub enum Instruction<'s> {
     Operator(Operator),
     Goto(usize),
     GotoIfNot(usize),
+    MarkStack,
+    RemoveMarked,
 }

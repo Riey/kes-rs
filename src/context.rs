@@ -15,6 +15,7 @@ pub struct Context<'c, P: Printer> {
     pub printer: P,
     pub stack: Vec<'c, Value<'c>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
+    mark: Vec<'c, usize>,
     cursor: usize,
 }
 
@@ -26,6 +27,7 @@ impl<'c, P: Printer> Context<'c, P> {
             stack: Vec::with_capacity_in(50, bump),
             printer,
             variables: AHashMap::new(),
+            mark: Vec::with_capacity_in(10, bump),
             cursor: 0,
         }
     }
@@ -214,6 +216,12 @@ impl<'c, P: Printer> Context<'c, P> {
                     return;
                 }
             }
+            Instruction::MarkStack => {
+                self.mark.push(self.stack.len() - 1);
+            }
+            Instruction::RemoveMarked => {
+                self.stack.remove(self.mark.pop().unwrap());
+            }
             Instruction::NewLine => {
                 self.flush_print();
                 self.printer.new_line();
@@ -250,4 +258,35 @@ impl<'c, P: Printer> Context<'c, P> {
 
         self.flush_print();
     }
+}
+
+#[test]
+fn str_select_test() {
+    use crate::builtin::DummyBuiltin;
+    use crate::parser::parse;
+    use crate::printer::RecordPrinter;
+    let bump = Bump::with_capacity(8196);
+    let instructions = parse(&bump, "
+선택 '1' {
+    '1' {
+        3
+    }
+    '2' {
+        4
+    }
+    그외 {
+        5
+    }
+}
+");
+    let mut printer = RecordPrinter::new();
+    let ctx = Context::new(
+        &bump,
+        &instructions,
+        &mut printer,
+    );
+
+    ctx.run(DummyBuiltin);
+
+    assert_eq!(printer.text(), "3");
 }

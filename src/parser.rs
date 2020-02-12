@@ -76,7 +76,10 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
-    fn read_select_arm(&mut self, prev_end: usize) {
+    #[must_use]
+    fn read_select_arm(&mut self, prev_end: usize) -> bool {
+        let mut need_duplicate = true;
+
         match self.lexer.next().unwrap() {
             token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
                 self.backup_state();
@@ -87,18 +90,25 @@ impl<'s, 'b> Parser<'s, 'b> {
                 self.push(Instruction::Nop);
             }
             Token::Else => {
+                need_duplicate = false;
                 self.backup_state();
                 self.set_state(State::SelectElse(prev_end));
             }
             Token::CloseBrace => {
+                // Remove duplicate
+                if let State::SelectArm(_, top) = self.state {
+                    self.ret[top - 3] = Instruction::Nop;
+                }
                 // Select ended without else
                 self.step(Token::CloseBrace);
-                return;
+                return false;
             }
             token => panic!("Unexpected token, line: {}, {:?}", self.lexer.line(), token),
         }
 
         assert_eq!(self.lexer.next(), Some(Token::OpenBrace));
+
+        need_duplicate
     }
 
     fn step(&mut self, token: Token<'s>) {
@@ -120,7 +130,10 @@ impl<'s, 'b> Parser<'s, 'b> {
                 self.backup_state();
                 self.set_state(State::Select);
                 self.move_next_open_brace();
-                self.read_select_arm(0);
+                self.push(Instruction::MarkStack);
+                if !self.read_select_arm(0) {
+                    self.push(Instruction::Pop);
+                }
             }
             Token::OpenBrace => {
                 let pos = self.next_pos();
@@ -148,8 +161,8 @@ impl<'s, 'b> Parser<'s, 'b> {
                         self.step(Token::CloseBrace);
                     }
                     State::Select => {
+                        self.push(Instruction::RemoveMarked);
                         self.restore_state();
-                        self.push(Instruction::Pop);
                     }
                     State::SelectArm(prev_end, top) => {
                         self.restore_state();
@@ -158,7 +171,9 @@ impl<'s, 'b> Parser<'s, 'b> {
                         if prev_end != 0 {
                             self.ret[prev_end] = Instruction::Goto(pos);
                         }
-                        self.read_select_arm(pos);
+                        if !self.read_select_arm(pos) {
+                            self.ret[top - 3] = Instruction::Nop;
+                        }
                     }
                     State::SelectElse(top) => {
                         self.restore_state();
@@ -385,9 +400,11 @@ fn parse_select_else() {
         instructions,
         &[
             Instruction::LoadInt(1),
+            Instruction::MarkStack,
+            Instruction::Pop,
             Instruction::LoadStr(""),
             Instruction::NewLine,
-            Instruction::Pop,
+            Instruction::RemoveMarked,
             Instruction::LoadStr(""),
             Instruction::NewLine,
         ]
@@ -427,30 +444,31 @@ fn parse_select() {
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Add),
+            Instruction::MarkStack,
             Instruction::Duplicate,
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(10),
+            Instruction::GotoIfNot(11),
             Instruction::LoadStr("3"),
             Instruction::NewLine,
-            Instruction::Goto(16),
+            Instruction::Goto(17),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(17),
+            Instruction::GotoIfNot(18),
             Instruction::LoadStr("2"),
             Instruction::NewLine,
-            Instruction::Goto(23),
-            Instruction::Duplicate,
+            Instruction::Goto(24),
+            Instruction::Nop,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(24),
+            Instruction::GotoIfNot(25),
             Instruction::LoadStr("1"),
             Instruction::NewLine,
-            Instruction::Goto(26),
+            Instruction::Goto(27),
             Instruction::LoadStr("other"),
             Instruction::NewLine,
-            Instruction::Pop,
+            Instruction::RemoveMarked,
             Instruction::LoadStr("foo"),
             Instruction::NewLine,
         ]
@@ -480,19 +498,20 @@ fn parse_select_without_else() {
         &instructions,
         &[
             Instruction::LoadInt(1),
+            Instruction::MarkStack,
             Instruction::Duplicate,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(7),
+            Instruction::GotoIfNot(8),
             Instruction::LoadInt(2),
-            Instruction::Goto(12),
-            Instruction::Duplicate,
+            Instruction::Goto(13),
+            Instruction::Nop,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(13),
+            Instruction::GotoIfNot(14),
             Instruction::LoadInt(3),
             Instruction::Nop,
-            Instruction::Pop,
+            Instruction::RemoveMarked,
         ]
     );
 }
