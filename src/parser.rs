@@ -460,9 +460,11 @@ fn parse_select() {
 #[test]
 fn parse_select_without_else() {
     use pretty_assertions::assert_eq;
-    
+
     let bump = Bump::with_capacity(8196);
-    let instructions = parse(&bump, "
+    let instructions = parse(
+        &bump,
+        "
 선택 1 {
     1 {
         2
@@ -471,23 +473,26 @@ fn parse_select_without_else() {
         3
     }
 }
-");
+",
+    );
 
-    assert_eq!(&instructions, &[
-        Instruction::LoadInt(1),
-        Instruction::Duplicate,
-        Instruction::LoadInt(1),
-        Instruction::Operator(Operator::Equal),
-        Instruction::GotoIfNot(7),
-        Instruction::LoadInt(2),
-        Instruction::Goto(12),
-        Instruction::Duplicate,
-        Instruction::LoadInt(2),
-        Instruction::Operator(Operator::Equal),
-        Instruction::GotoIfNot(13),
-        Instruction::LoadInt(3),
-        Instruction::Nop,
-        Instruction::Pop,
-    ]);
+    assert_eq!(
+        &instructions,
+        &[
+            Instruction::LoadInt(1),
+            Instruction::Duplicate,
+            Instruction::LoadInt(1),
+            Instruction::Operator(Operator::Equal),
+            Instruction::GotoIfNot(7),
+            Instruction::LoadInt(2),
+            Instruction::Goto(12),
+            Instruction::Duplicate,
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Equal),
+            Instruction::GotoIfNot(13),
+            Instruction::LoadInt(3),
+            Instruction::Nop,
+            Instruction::Pop,
+        ]
+    );
 }
-
