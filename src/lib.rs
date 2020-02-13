@@ -1,5 +1,3 @@
-#![feature(stmt_expr_attributes)]
-
 pub mod builtin;
 pub mod context;
 pub mod instruction;
