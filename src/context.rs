@@ -266,8 +266,10 @@ fn str_select_test() {
     use crate::parser::parse;
     use crate::printer::RecordPrinter;
     let bump = Bump::with_capacity(8196);
-    let instructions = parse(&bump, "
-선택 '1' {
+    let instructions = parse(
+        &bump,
+        "
+선택 '2' {
     '1' {
         3
     }
@@ -278,15 +280,13 @@ fn str_select_test() {
         5
     }
 }
-");
-    let mut printer = RecordPrinter::new();
-    let ctx = Context::new(
-        &bump,
-        &instructions,
-        &mut printer,
+",
     );
+
+    let mut printer = RecordPrinter::new();
+    let ctx = Context::new(&bump, &instructions, &mut printer);
 
     ctx.run(DummyBuiltin);
 
-    assert_eq!(printer.text(), "3");
+    assert_eq!(printer.text(), "4");
 }
