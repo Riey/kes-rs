@@ -61,3 +61,20 @@ impl Printer for RecordPrinter {
         self.0.push('#');
     }
 }
+
+pub struct StdioPrinter;
+
+impl Printer for StdioPrinter {
+    fn print(&mut self, v: Value) {
+        print!("{}", v);
+    }
+    fn new_line(&mut self) {
+        println!();
+    }
+    fn wait(&mut self) {
+        let mut buf = String::new();
+        std::io::stdin().read_line(&mut buf).unwrap();
+    }
+    
+}
+

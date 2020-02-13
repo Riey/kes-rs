@@ -111,16 +111,16 @@ impl<'c, P: Printer> Context<'c, P> {
                 binop_raw_bool!(!=);
             }
             Operator::Greater => {
-                binop_bool!(>);
+                binop_raw_bool!(>);
             }
             Operator::Less => {
-                binop_bool!(<);
+                binop_raw_bool!(<);
             }
             Operator::GreaterOrEqual => {
-                binop_bool!(>=);
+                binop_raw_bool!(>=);
             }
             Operator::LessOrEqual => {
-                binop_bool!(<=);
+                binop_raw_bool!(<=);
             }
             Operator::And => {
                 binop_bool!(&);
