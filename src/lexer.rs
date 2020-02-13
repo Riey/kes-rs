@@ -138,6 +138,8 @@ impl<'s> Lexer<'s> {
             Some(Token::Select)
         } else if self.try_strip_prefix("종료") {
             Some(Token::Exit)
+        } else if self.try_strip_prefix("반복") {
+            Some(Token::Loop)
         } else if self.try_strip_prefix("[?]") {
             Some(Token::Conditional)
         } else if self.try_strip_prefix("[-]") {

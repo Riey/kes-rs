@@ -12,6 +12,7 @@ enum State {
     If(usize),
     Else(usize),
     ElseIf(usize, usize),
+    Loop(usize, usize),
     Select,
     SelectElse(usize),
     SelectArm(usize, usize),
@@ -83,7 +84,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                 self.push(Instruction::Duplicate);
                 self.step(token);
                 self.push(Instruction::Operator(Operator::Equal));
-                self.set_state(State::SelectArm(prev_end, self.ret.len()));
+                self.set_state(State::SelectArm(prev_end, self.next_pos()));
                 self.push(Instruction::Nop);
                 assert_eq!(self.lexer.next(), Some(Token::OpenBrace));
             }
@@ -119,6 +120,14 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::Operator(op) => self.push(Instruction::Operator(op)),
             Token::At => self.push(Instruction::NewLine),
             Token::Sharp => self.push(Instruction::Wait),
+            Token::Loop => {
+                self.backup_state();
+                let start = self.next_pos();
+                self.move_next_open_brace();
+                let end = self.next_pos();
+                self.push(Instruction::Nop);
+                self.set_state(State::Loop(start, end));
+            }
             Token::Select => {
                 self.backup_state();
                 self.set_state(State::Select);
@@ -131,6 +140,7 @@ impl<'s, 'b> Parser<'s, 'b> {
 
                 match self.state {
                     State::Select => unreachable!(),
+                    State::Loop(..) => unreachable!(),
                     _ => {
                         self.backup_state();
                         self.push(Instruction::Nop);
@@ -150,6 +160,11 @@ impl<'s, 'b> Parser<'s, 'b> {
                         self.ret[if_end] = Instruction::Goto(pos + 1);
                         self.set_state(State::If(top));
                         self.step(Token::CloseBrace);
+                    }
+                    State::Loop(start, end) => {
+                        self.ret[end] = Instruction::GotoIfNot(pos + 1);
+                        self.push(Instruction::Goto(start));
+                        self.restore_state();
                     }
                     State::Select => {
                         self.push(Instruction::RemoveMarked);
@@ -500,6 +515,28 @@ fn parse_select_without_else() {
             Instruction::LoadInt(3),
             Instruction::Nop,
             Instruction::RemoveMarked,
+        ]
+    );
+}
+
+#[test]
+fn parse_loop_test() {
+    let bump = Bump::with_capacity(8196);
+    let instructions = parse(&bump, "0 [$0] 반복 $0 3 < { $0 1 + [$0] }");
+    assert_eq!(
+        instructions,
+        &[
+            Instruction::LoadInt(0),
+            Instruction::StoreVar("0"),
+            Instruction::LoadVar("0"),
+            Instruction::LoadInt(3),
+            Instruction::Operator(Operator::Less),
+            Instruction::GotoIfNot(11),
+            Instruction::LoadVar("0"),
+            Instruction::LoadInt(1),
+            Instruction::Operator(Operator::Add),
+            Instruction::StoreVar("0"),
+            Instruction::Goto(2),
         ]
     );
 }

@@ -8,6 +8,8 @@ pub enum Token<'s> {
     Select,
     /// 종료
     Exit,
+    /// 반복
+    Loop,
     /// ''
     StrLit(&'s str),
     /// 123
