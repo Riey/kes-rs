@@ -1,7 +1,6 @@
 use crate::builtin::Builtin;
 use crate::instruction::Instruction;
 use crate::operator::Operator;
-use crate::printer::Printer;
 use crate::value::Value;
 use ahash::AHashMap;
 use bumpalo::collections::{String, Vec};
@@ -9,23 +8,21 @@ use bumpalo::Bump;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
-pub struct Context<'c, P: Printer> {
+pub struct Context<'c> {
     pub bump: &'c Bump,
     pub instructions: &'c [Instruction<'c>],
-    pub printer: P,
     pub stack: Vec<'c, Value<'c>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
     mark: Vec<'c, usize>,
     cursor: usize,
 }
 
-impl<'c, P: Printer> Context<'c, P> {
-    pub fn new(bump: &'c Bump, instructions: &'c [Instruction<'c>], printer: P) -> Self {
+impl<'c> Context<'c> {
+    pub fn new(bump: &'c Bump, instructions: &'c [Instruction<'c>]) -> Self {
         Self {
             bump,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
-            printer,
             variables: AHashMap::new(),
             mark: Vec::with_capacity_in(10, bump),
             cursor: 0,
@@ -177,9 +174,9 @@ impl<'c, P: Printer> Context<'c, P> {
         }
     }
 
-    pub fn flush_print(&mut self) {
+    pub fn flush_print<B: Builtin>(&mut self, builtin: &mut B) {
         for v in self.stack.drain(..) {
-            self.printer.print(v);
+            builtin.print(v);
         }
     }
 
@@ -223,13 +220,13 @@ impl<'c, P: Printer> Context<'c, P> {
                 self.stack.remove(self.mark.pop().unwrap());
             }
             Instruction::NewLine => {
-                self.flush_print();
-                self.printer.new_line();
+                self.flush_print(builtin);
+                builtin.new_line();
             }
             Instruction::Wait => {
-                self.flush_print();
-                self.printer.new_line();
-                self.printer.wait();
+                self.flush_print(builtin);
+                builtin.new_line();
+                builtin.wait();
             }
             Instruction::Duplicate => {
                 let item = self.peek().copied().unwrap();
@@ -256,15 +253,14 @@ impl<'c, P: Printer> Context<'c, P> {
             self.run_instruction(&mut builtin, instruction);
         }
 
-        self.flush_print();
+        self.flush_print(&mut builtin);
     }
 }
 
 #[test]
 fn str_select_test() {
-    use crate::builtin::DummyBuiltin;
+    use crate::builtin::RecordBuiltin;
     use crate::parser::parse;
-    use crate::printer::RecordPrinter;
     let bump = Bump::with_capacity(8196);
     let instructions = parse(
         &bump,
@@ -283,10 +279,10 @@ fn str_select_test() {
 ",
     );
 
-    let mut printer = RecordPrinter::new();
-    let ctx = Context::new(&bump, &instructions, &mut printer);
+    let mut builtin = RecordBuiltin::new();
+    let ctx = Context::new(&bump, &instructions);
 
-    ctx.run(DummyBuiltin);
+    ctx.run(&mut builtin);
 
-    assert_eq!(printer.text(), "4");
+    assert_eq!(builtin.text(), "4");
 }

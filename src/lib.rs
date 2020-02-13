@@ -4,7 +4,6 @@ pub mod instruction;
 mod lexer;
 pub mod operator;
 pub mod parser;
-pub mod printer;
 pub mod token;
 pub mod value;
 
