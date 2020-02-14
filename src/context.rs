@@ -277,7 +277,7 @@ fn str_select_test() {
     }
 }
 ",
-    );
+    ).unwrap();
 
     let mut builtin = RecordBuiltin::new();
     let ctx = Context::new(&bump, &instructions);

@@ -29,7 +29,7 @@ impl Builtin for StdioBuiltin {
 fn main() {
     let bump = Bump::with_capacity(8196);
 
-    let script = parse(&bump, include_str!("fib.kes"));
+    let script = parse(&bump, include_str!("fib.kes")).unwrap();
 
     let ctx = Context::new(&bump, &script);
 

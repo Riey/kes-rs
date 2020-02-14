@@ -1,5 +1,6 @@
 use crate::operator::Operator;
 use crate::token::Token;
+use crate::error::{ParserError, ParserResult as Result};
 
 fn is_ident_char(c: char) -> bool {
     match c {
@@ -16,31 +17,16 @@ fn is_not_ident_char(c: char) -> bool {
 
 pub struct Lexer<'s> {
     text: &'s str,
-    #[cfg(feature = "debug-info")]
     line: usize,
 }
 
 impl<'s> Lexer<'s> {
     pub fn new(text: &'s str) -> Self {
-        #[cfg(feature = "debug-info")]
-        {
             Self { text, line: 1 }
-        }
-        #[cfg(not(feature = "debug-info"))]
-        {
-            Self { text }
-        }
     }
 
     pub fn line(&self) -> usize {
-        #[cfg(feature = "debug-info")]
-        {
             self.line
-        }
-        #[cfg(not(feature = "debug-info"))]
-        {
-            0
-        }
     }
 
     fn skip_ws(&mut self) {
@@ -48,10 +34,7 @@ impl<'s> Lexer<'s> {
             match self.text.as_bytes().get(0) {
                 Some(b'\n') => {
                     self.text = unsafe { self.text.get_unchecked(1..) };
-                    #[cfg(feature = "debug-info")]
-                    {
                         self.line += 1;
-                    }
                 }
                 Some(b' ') => {
                     self.text = self.text.trim_start_matches(' ');
@@ -62,14 +45,21 @@ impl<'s> Lexer<'s> {
                     unsafe {
                         self.text = self.text.get_unchecked(pos..);
                     }
-                    #[cfg(feature = "debug-info")]
-                    {
                         self.line += 1;
-                    }
                 }
                 _ => break,
             }
         }
+    }
+
+    #[inline]
+    fn make_code_err(&self, msg: &'static str) -> ParserError {
+        ParserError::InvalidCode(msg, self.line())
+    }
+
+    #[inline]
+    fn make_char_err(&self, ch: char) -> ParserError {
+        ParserError::InvalidChar(ch, self.line())
     }
 
     #[inline]
@@ -114,11 +104,11 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn read_str(&mut self) -> &'s str {
-        let pos = memchr::memchr(b'\'', self.text.as_bytes()).expect("String quote is not paired");
+    fn read_str(&mut self) -> Result<&'s str> {
+        let pos = memchr::memchr(b'\'', self.text.as_bytes()).ok_or(self.make_code_err("String quote is not paired"))?;
         let lit = unsafe { self.text.get_unchecked(..pos) };
         self.text = unsafe { self.text.get_unchecked(pos + 1..) };
-        lit
+        Ok(lit)
     }
 
     #[inline]
@@ -131,29 +121,29 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_keyword(&mut self) -> Option<Token<'s>> {
+    fn try_read_keyword(&mut self) -> Result<Option<Token<'s>>> {
         if self.try_strip_prefix("그외") {
-            Some(Token::Else)
+            Ok(Some(Token::Else))
         } else if self.try_strip_prefix("선택") {
-            Some(Token::Select)
+            Ok(Some(Token::Select))
         } else if self.try_strip_prefix("종료") {
-            Some(Token::Exit)
+            Ok(Some(Token::Exit))
         } else if self.try_strip_prefix("반복") {
-            Some(Token::Loop)
+            Ok(Some(Token::Loop))
         } else if self.try_strip_prefix("[?]") {
-            Some(Token::Conditional)
+            Ok(Some(Token::Conditional))
         } else if self.try_strip_prefix("[-]") {
-            Some(Token::Pop)
+            Ok(Some(Token::Pop))
         } else if self.try_strip_prefix("[+]") {
-            Some(Token::Duplicate)
+            Ok(Some(Token::Duplicate))
         } else if self.try_strip_prefix("[$") {
             let pos =
-                memchr::memchr(b']', self.text.as_bytes()).expect("Assign bracket is not paired");
+                memchr::memchr(b']', self.text.as_bytes()).ok_or(self.make_code_err("Assign bracket is not paired"))?;
             let name = unsafe { self.text.get_unchecked(..pos) };
             self.text = unsafe { self.text.get_unchecked(pos + 1..) };
-            Some(Token::Assign(name))
+            Ok(Some(Token::Assign(name)))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -195,35 +185,36 @@ impl<'s> Lexer<'s> {
 }
 
 impl<'s> Iterator for Lexer<'s> {
-    type Item = Token<'s>;
+    type Item = Result<Token<'s>>;
 
-    fn next(&mut self) -> Option<Token<'s>> {
+    fn next(&mut self) -> Option<Result<Token<'s>>> {
         self.skip_ws();
 
-        if let token @ Some(_) = self.try_read_keyword() {
-            return token;
+        if let Ok(Some(token)) = self.try_read_keyword() {
+            return Some(Ok(token));
         }
 
         if let Some(op) = self.try_read_operator() {
-            return Some(Token::Operator(op));
+            return Some(Ok(Token::Operator(op)));
         }
 
         if let Some(ident) = self.try_read_ident() {
             if let b'0'..=b'9' = ident.as_bytes()[0] {
-                return Some(Token::IntLit(ident.parse().unwrap()));
+                return Some(ident.parse().map(Token::IntLit).map_err(|_| self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")));
             } else {
-                return Some(Token::Builtin(ident));
+                return Some(Ok(Token::Builtin(ident)));
             }
         }
 
         match self.pop_char()? {
-            '\'' => Some(Token::StrLit(self.read_str())),
-            '$' => Some(Token::Variable(self.read_ident())),
-            '{' => Some(Token::OpenBrace),
-            '}' => Some(Token::CloseBrace),
-            '#' => Some(Token::Sharp),
-            '@' => Some(Token::At),
-            ch => panic!("Unexpected char {}", ch),
+            '\'' =>
+                Some(self.read_str().map(Token::StrLit)),
+            '$' => Some(Ok(Token::Variable(self.read_ident()))),
+            '{' => Some(Ok(Token::OpenBrace)),
+            '}' => Some(Ok(Token::CloseBrace)),
+            '#' => Some(Ok(Token::Sharp)),
+            '@' => Some(Ok(Token::At)),
+            ch => Some(Err(self.make_char_err(ch))),
         }
     }
 }
@@ -233,20 +224,20 @@ fn lex_test() {
     use pretty_assertions::assert_eq;
     let mut ts = Lexer::new("'ABC'#");
 
-    assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
-    assert_eq!(ts.next().unwrap(), Token::Sharp,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Sharp,);
     assert!(ts.text.is_empty());
 
     ts = Lexer::new("[?][-][+][$123]");
 
-    assert_eq!(ts.next().unwrap(), Token::Conditional,);
-    assert_eq!(ts.next().unwrap(), Token::Pop,);
-    assert_eq!(ts.next().unwrap(), Token::Duplicate,);
-    assert_eq!(ts.next().unwrap(), Token::Assign("123"),);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Conditional,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Pop,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Duplicate,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Assign("123"),);
     assert!(ts.text.is_empty());
 
     ts = Lexer::new("'ABC' @");
-    assert_eq!(ts.next().unwrap(), Token::StrLit("ABC"),);
-    assert_eq!(ts.next().unwrap(), Token::At,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::At,);
     assert!(ts.text.is_empty());
 }

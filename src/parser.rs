@@ -6,6 +6,8 @@ use bumpalo::collections::Vec;
 use bumpalo::Bump;
 use std::vec::Vec as StdVec;
 
+use crate::error::{ParserResult as Result, ParserError};
+
 #[derive(Clone, Copy)]
 enum State {
     Empty,
@@ -62,36 +64,58 @@ impl<'s, 'b> Parser<'s, 'b> {
         self.ret.len()
     }
 
+    #[inline(always)]
+    fn next_token(&mut self) -> Result<Option<Token<'s>>> {
+        self.lexer.next().transpose()
+    }
+
+    #[inline(always)]
+    fn expect_next_token(&mut self) -> Result<Token<'s>> {
+        self.lexer.next().ok_or(ParserError::UnexpectedEndOfToken)?
+    }
+
+    #[inline(always)]
     fn intern(&self, s: &str) -> &'b str {
         self.bump.alloc_str(s)
     }
 
-    fn move_next_open_brace(&mut self) {
+    fn move_next_open_brace(&mut self) -> Result<()> {
         loop {
-            match self.lexer.next().unwrap() {
+            match self.expect_next_token()? {
                 Token::OpenBrace => {
-                    break;
+                    break Ok(());
                 }
-                token => self.step(token),
+                token => self.step(token)?,
             }
         }
     }
 
-    fn read_select_arm(&mut self, prev_end: usize) {
-        match self.lexer.next().unwrap() {
+    fn make_unexpected_token_err(&self, tok: Token) -> ParserError {
+        ParserError::UnexpectedToken(format!("{:?}", tok), self.lexer.line())
+    }
+
+    fn expect_next_open_brace(&mut self) -> Result<()> {
+        match self.expect_next_token()? {
+            Token::OpenBrace => Ok(()),
+            token => Err(ParserError::UnexpectedToken(format!("{:?}가 아니라 {{가 와야합니다", token), self.lexer.line())),
+        }
+    }
+
+    fn read_select_arm(&mut self, prev_end: usize) -> Result<()> {
+        match self.expect_next_token()? {
             token @ Token::IntLit(_) | token @ Token::StrLit(_) => {
                 self.backup_state();
                 self.push(Instruction::Duplicate);
-                self.step(token);
+                self.step(token)?;
                 self.push(Instruction::Operator(Operator::Equal));
                 self.set_state(State::SelectArm(prev_end, self.next_pos()));
                 self.push(Instruction::Nop);
-                assert_eq!(self.lexer.next(), Some(Token::OpenBrace));
+                self.expect_next_open_brace()?;
             }
             Token::Else => {
                 self.backup_state();
                 self.set_state(State::SelectElse(prev_end));
-                assert_eq!(self.lexer.next(), Some(Token::OpenBrace));
+                self.expect_next_open_brace()?;
             }
             Token::CloseBrace => {
                 // Remove duplicate
@@ -99,13 +123,17 @@ impl<'s, 'b> Parser<'s, 'b> {
                     self.ret[top - 3] = Instruction::Nop;
                 }
                 // Select ended without else
-                self.step(Token::CloseBrace);
+                self.step(Token::CloseBrace)?;
             }
-            token => panic!("Unexpected token, line: {}, {:?}", self.lexer.line(), token),
+            token => {
+                return Err(self.make_unexpected_token_err(token));
+            }
         }
+
+        Ok(())
     }
 
-    fn step(&mut self, token: Token<'s>) {
+    fn step(&mut self, token: Token<'s>) -> Result<()> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
@@ -123,7 +151,7 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::Loop => {
                 self.backup_state();
                 let start = self.next_pos();
-                self.move_next_open_brace();
+                self.move_next_open_brace()?;
                 let end = self.next_pos();
                 self.push(Instruction::Nop);
                 self.set_state(State::Loop(start, end));
@@ -131,16 +159,17 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::Select => {
                 self.backup_state();
                 self.set_state(State::Select);
-                self.move_next_open_brace();
+                self.move_next_open_brace()?;
                 self.push(Instruction::MarkStack);
-                self.read_select_arm(0);
+                self.read_select_arm(0)?;
             }
             Token::OpenBrace => {
                 let pos = self.next_pos();
 
                 match self.state {
-                    State::Select => unreachable!(),
-                    State::Loop(..) => unreachable!(),
+                    State::Select | State::Loop(..) => {
+                        return Err(self.make_unexpected_token_err(Token::OpenBrace));
+                    }
                     _ => {
                         self.backup_state();
                         self.push(Instruction::Nop);
@@ -151,15 +180,13 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::CloseBrace => {
                 let pos = self.next_pos();
                 match self.state {
-                    State::Empty => panic!(
-                        "Unexpected block close, line: {}, {:?}",
-                        self.lexer.line(),
-                        self.ret
-                    ),
+                    State::Empty => {
+                        return Err(self.make_unexpected_token_err(Token::CloseBrace));
+                    }
                     State::ElseIf(if_end, top) => {
                         self.ret[if_end] = Instruction::Goto(pos + 1);
                         self.set_state(State::If(top));
-                        self.step(Token::CloseBrace);
+                        self.step(Token::CloseBrace)?;
                     }
                     State::Loop(start, end) => {
                         self.ret[end] = Instruction::GotoIfNot(pos + 1);
@@ -177,7 +204,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                         if prev_end != 0 {
                             self.ret[prev_end] = Instruction::Goto(pos);
                         }
-                        self.read_select_arm(pos);
+                        self.read_select_arm(pos)?;
                     }
                     State::SelectElse(top) => {
                         self.restore_state();
@@ -186,9 +213,9 @@ impl<'s, 'b> Parser<'s, 'b> {
                         }
                     }
                     State::If(top) => {
-                        match self.lexer.next() {
+                        match self.next_token()? {
                             Some(Token::Else) => {
-                                match self.lexer.next().unwrap() {
+                                match self.expect_next_token()? {
                                     // Else
                                     Token::OpenBrace => {
                                         self.ret[top] = Instruction::GotoIfNot(pos + 1);
@@ -199,8 +226,8 @@ impl<'s, 'b> Parser<'s, 'b> {
                                     token => {
                                         self.ret[top] = Instruction::GotoIfNot(pos + 1);
                                         self.push(Instruction::Nop);
-                                        self.step(token);
-                                        self.move_next_open_brace();
+                                        self.step(token)?;
+                                        self.move_next_open_brace()?;
                                         self.set_state(State::ElseIf(pos, self.ret.len()));
                                         self.push(Instruction::Nop);
                                     }
@@ -210,7 +237,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                             Some(token) => {
                                 self.ret[top] = Instruction::GotoIfNot(pos);
                                 self.restore_state();
-                                self.step(token);
+                                self.step(token)?;
                             }
                             None => {
                                 self.ret[top] = Instruction::GotoIfNot(pos);
@@ -226,18 +253,20 @@ impl<'s, 'b> Parser<'s, 'b> {
                 };
             }
         }
+
+        Ok(())
     }
 
-    fn parse(mut self) -> Vec<'b, Instruction<'b>> {
-        while let Some(token) = self.lexer.next() {
-            self.step(token);
+    fn parse(mut self) -> Result<Vec<'b, Instruction<'b>>> {
+        while let Some(token) = self.next_token()? {
+            self.step(token)?;
         }
 
-        self.ret
+        Ok(self.ret)
     }
 }
 
-pub fn parse<'b>(bump: &'b Bump, source: &str) -> Vec<'b, Instruction<'b>> {
+pub fn parse<'b>(bump: &'b Bump, source: &str) -> Result<Vec<'b, Instruction<'b>>> {
     Parser::new(bump, source).parse()
 }
 
@@ -253,7 +282,7 @@ fn parse_condition() {
 5 [$0]
 $0 2 % '$0은 짝수' '$0은 홀수' [?]
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         instructions,
@@ -281,7 +310,7 @@ fn parse_assign() {
         "
 1 2 + [$1]
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         instructions,
@@ -308,7 +337,7 @@ fn parse_if_test() {
 }
 '3 + 4 = ' 3 4 + @
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         &instructions,
@@ -348,7 +377,7 @@ fn parse_if_else_test() {
 }
 'foo'@
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         &instructions,
@@ -398,7 +427,7 @@ fn parse_select_else() {
 }
 ''@
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         instructions,
@@ -439,7 +468,7 @@ fn parse_select() {
 }
 'foo'@
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         &instructions,
@@ -495,7 +524,7 @@ fn parse_select_without_else() {
     }
 }
 ",
-    );
+    ).unwrap();
 
     assert_eq!(
         &instructions,
@@ -522,7 +551,7 @@ fn parse_select_without_else() {
 #[test]
 fn parse_loop_test() {
     let bump = Bump::with_capacity(8196);
-    let instructions = parse(&bump, "0 [$0] 반복 $0 3 < { $0 1 + [$0] }");
+    let instructions = parse(&bump, "0 [$0] 반복 $0 3 < { $0 1 + [$0] }").unwrap();
     assert_eq!(
         instructions,
         &[
@@ -539,4 +568,22 @@ fn parse_loop_test() {
             Instruction::Goto(2),
         ]
     );
+}
+
+// Issue #1
+#[test]
+fn parse_nested_block_with_loop() {
+    let bump = Bump::with_capacity(8196);
+    let instructions = parse(&bump, "
+반복 1 {
+    1 2 + 3 == {
+        '4'
+    } 그외 {
+        '5'
+    }
+}
+    ").unwrap();
+
+    assert_eq!(instructions, &[
+    ]);
 }
