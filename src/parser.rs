@@ -167,7 +167,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                 let pos = self.next_pos();
 
                 match self.state {
-                    State::Select | State::Loop(..) => {
+                    State::Select => {
                         return Err(self.make_unexpected_token_err(Token::OpenBrace));
                     }
                     _ => {
@@ -575,7 +575,7 @@ fn parse_loop_test() {
 fn parse_nested_block_with_loop() {
     let bump = Bump::with_capacity(8196);
     let instructions = parse(&bump, "
-반복 1 {
+반복 0 {
     1 2 + 3 == {
         '4'
     } 그외 {
@@ -585,5 +585,17 @@ fn parse_nested_block_with_loop() {
     ").unwrap();
 
     assert_eq!(instructions, &[
+        Instruction::LoadInt(0),
+        Instruction::GotoIfNot(12),
+        Instruction::LoadInt(1),
+        Instruction::LoadInt(2),
+        Instruction::Operator(Operator::Add),
+        Instruction::LoadInt(3),
+        Instruction::Operator(Operator::Equal),
+        Instruction::GotoIfNot(10),
+        Instruction::LoadStr("4"),
+        Instruction::Goto(11),
+        Instruction::LoadStr("5"),
+        Instruction::Goto(0),
     ]);
 }
