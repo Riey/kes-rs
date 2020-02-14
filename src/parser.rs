@@ -6,7 +6,7 @@ use bumpalo::collections::Vec;
 use bumpalo::Bump;
 use std::vec::Vec as StdVec;
 
-use crate::error::{ParserResult as Result, ParserError};
+use crate::error::{ParserError, ParserResult as Result};
 
 #[derive(Clone, Copy)]
 enum State {
@@ -97,7 +97,10 @@ impl<'s, 'b> Parser<'s, 'b> {
     fn expect_next_open_brace(&mut self) -> Result<()> {
         match self.expect_next_token()? {
             Token::OpenBrace => Ok(()),
-            token => Err(ParserError::UnexpectedToken(format!("{:?}가 아니라 {{가 와야합니다", token), self.lexer.line())),
+            token => Err(ParserError::UnexpectedToken(
+                format!("{:?}가 아니라 {{가 와야합니다", token),
+                self.lexer.line(),
+            )),
         }
     }
 
@@ -282,7 +285,8 @@ fn parse_condition() {
 5 [$0]
 $0 2 % '$0은 짝수' '$0은 홀수' [?]
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         instructions,
@@ -310,7 +314,8 @@ fn parse_assign() {
         "
 1 2 + [$1]
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         instructions,
@@ -337,7 +342,8 @@ fn parse_if_test() {
 }
 '3 + 4 = ' 3 4 + @
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         &instructions,
@@ -377,7 +383,8 @@ fn parse_if_else_test() {
 }
 'foo'@
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         &instructions,
@@ -427,7 +434,8 @@ fn parse_select_else() {
 }
 ''@
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         instructions,
@@ -468,7 +476,8 @@ fn parse_select() {
 }
 'foo'@
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         &instructions,
@@ -524,7 +533,8 @@ fn parse_select_without_else() {
     }
 }
 ",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
         &instructions,
@@ -574,7 +584,9 @@ fn parse_loop_test() {
 #[test]
 fn parse_nested_block_with_loop() {
     let bump = Bump::with_capacity(8196);
-    let instructions = parse(&bump, "
+    let instructions = parse(
+        &bump,
+        "
 반복 0 {
     1 2 + 3 == {
         '4'
@@ -582,20 +594,25 @@ fn parse_nested_block_with_loop() {
         '5'
     }
 }
-    ").unwrap();
+    ",
+    )
+    .unwrap();
 
-    assert_eq!(instructions, &[
-        Instruction::LoadInt(0),
-        Instruction::GotoIfNot(12),
-        Instruction::LoadInt(1),
-        Instruction::LoadInt(2),
-        Instruction::Operator(Operator::Add),
-        Instruction::LoadInt(3),
-        Instruction::Operator(Operator::Equal),
-        Instruction::GotoIfNot(10),
-        Instruction::LoadStr("4"),
-        Instruction::Goto(11),
-        Instruction::LoadStr("5"),
-        Instruction::Goto(0),
-    ]);
+    assert_eq!(
+        instructions,
+        &[
+            Instruction::LoadInt(0),
+            Instruction::GotoIfNot(12),
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Add),
+            Instruction::LoadInt(3),
+            Instruction::Operator(Operator::Equal),
+            Instruction::GotoIfNot(10),
+            Instruction::LoadStr("4"),
+            Instruction::Goto(11),
+            Instruction::LoadStr("5"),
+            Instruction::Goto(0),
+        ]
+    );
 }

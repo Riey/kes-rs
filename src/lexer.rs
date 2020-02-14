@@ -1,6 +1,6 @@
+use crate::error::{ParserError, ParserResult as Result};
 use crate::operator::Operator;
 use crate::token::Token;
-use crate::error::{ParserError, ParserResult as Result};
 
 fn is_ident_char(c: char) -> bool {
     match c {
@@ -22,11 +22,11 @@ pub struct Lexer<'s> {
 
 impl<'s> Lexer<'s> {
     pub fn new(text: &'s str) -> Self {
-            Self { text, line: 1 }
+        Self { text, line: 1 }
     }
 
     pub fn line(&self) -> usize {
-            self.line
+        self.line
     }
 
     fn skip_ws(&mut self) {
@@ -34,7 +34,7 @@ impl<'s> Lexer<'s> {
             match self.text.as_bytes().get(0) {
                 Some(b'\n') => {
                     self.text = unsafe { self.text.get_unchecked(1..) };
-                        self.line += 1;
+                    self.line += 1;
                 }
                 Some(b' ') => {
                     self.text = self.text.trim_start_matches(' ');
@@ -45,7 +45,7 @@ impl<'s> Lexer<'s> {
                     unsafe {
                         self.text = self.text.get_unchecked(pos..);
                     }
-                        self.line += 1;
+                    self.line += 1;
                 }
                 _ => break,
             }
@@ -105,7 +105,8 @@ impl<'s> Lexer<'s> {
     }
 
     fn read_str(&mut self) -> Result<&'s str> {
-        let pos = memchr::memchr(b'\'', self.text.as_bytes()).ok_or(self.make_code_err("String quote is not paired"))?;
+        let pos = memchr::memchr(b'\'', self.text.as_bytes())
+            .ok_or(self.make_code_err("String quote is not paired"))?;
         let lit = unsafe { self.text.get_unchecked(..pos) };
         self.text = unsafe { self.text.get_unchecked(pos + 1..) };
         Ok(lit)
@@ -137,8 +138,8 @@ impl<'s> Lexer<'s> {
         } else if self.try_strip_prefix("[+]") {
             Ok(Some(Token::Duplicate))
         } else if self.try_strip_prefix("[$") {
-            let pos =
-                memchr::memchr(b']', self.text.as_bytes()).ok_or(self.make_code_err("Assign bracket is not paired"))?;
+            let pos = memchr::memchr(b']', self.text.as_bytes())
+                .ok_or(self.make_code_err("Assign bracket is not paired"))?;
             let name = unsafe { self.text.get_unchecked(..pos) };
             self.text = unsafe { self.text.get_unchecked(pos + 1..) };
             Ok(Some(Token::Assign(name)))
@@ -200,15 +201,16 @@ impl<'s> Iterator for Lexer<'s> {
 
         if let Some(ident) = self.try_read_ident() {
             if let b'0'..=b'9' = ident.as_bytes()[0] {
-                return Some(ident.parse().map(Token::IntLit).map_err(|_| self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")));
+                return Some(ident.parse().map(Token::IntLit).map_err(|_| {
+                    self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")
+                }));
             } else {
                 return Some(Ok(Token::Builtin(ident)));
             }
         }
 
         match self.pop_char()? {
-            '\'' =>
-                Some(self.read_str().map(Token::StrLit)),
+            '\'' => Some(self.read_str().map(Token::StrLit)),
             '$' => Some(Ok(Token::Variable(self.read_ident()))),
             '{' => Some(Ok(Token::OpenBrace)),
             '}' => Some(Ok(Token::CloseBrace)),
