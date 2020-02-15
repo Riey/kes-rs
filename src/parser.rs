@@ -154,6 +154,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                     break Ok(());
                 }
                 State::OpenBrace => self.process_if_block()?,
+                State::Loop => self.process_loop_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
             }
         }
@@ -169,9 +170,6 @@ impl<'s, 'b> Parser<'s, 'b> {
 
         loop {
             match self.step()? {
-                State::OpenBrace => {
-                    self.process_if_block()?;
-                }
                 State::CloseBrace => {
                     self.push(Instruction::EndBlock);
                     self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
@@ -198,7 +196,34 @@ impl<'s, 'b> Parser<'s, 'b> {
                     self.ret[endif] = Instruction::Goto(self.next_pos());
                     break Ok(());
                 }
+                State::OpenBrace => {
+                    self.process_if_block()?;
+                }
+                State::Loop => self.process_loop_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
+            }
+        }
+    }
+
+    fn process_loop_block(&mut self) -> Result<()> {
+        self.push(Instruction::StartBlock);
+
+        let loop_top = self.next_pos();
+        self.read_until_open_brace()?;
+        let loop_jmp = self.next_pos();
+        self.push(Instruction::Nop);
+
+        loop {
+            match self.step()? {
+                State::CloseBrace => {
+                    self.push(Instruction::Goto(loop_top));
+                    self.ret[loop_jmp] = Instruction::GotoIfNot(self.next_pos());
+                    self.push(Instruction::EndBlock);
+                    break Ok(());
+                }
+                State::OpenBrace => self.process_if_block()?,
+                State::Loop => self.process_loop_block()?,
+                state => break Err(self.make_unexpected_state_err(state)),
             }
         }
     }
@@ -208,6 +233,9 @@ impl<'s, 'b> Parser<'s, 'b> {
             match self.step()? {
                 State::OpenBrace => {
                     self.process_if_block()?;
+                }
+                State::Loop => {
+                    self.process_loop_block()?;
                 }
                 State::End => break Ok(()),
                 state => break Err(self.make_unexpected_state_err(state)),
@@ -469,17 +497,20 @@ fn parse_loop_test() {
     parse_test(
         "0 [$0] 반복 $0 3 < { $0 1 + [$0] }",
         &[
+            Instruction::StartBlock,
             Instruction::LoadInt(0),
             Instruction::StoreVar("0"),
+            Instruction::StartBlock,
             Instruction::LoadVar("0"),
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Less),
-            Instruction::GotoIfNot(11),
+            Instruction::GotoIfNot(13),
             Instruction::LoadVar("0"),
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Add),
             Instruction::StoreVar("0"),
-            Instruction::Goto(2),
+            Instruction::Goto(4),
+            Instruction::EndBlock,
         ],
     );
 }
