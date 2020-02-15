@@ -134,7 +134,7 @@ impl<'c> Context<'c> {
             Operator::Not => {
                 let b = self.pop_bool();
 
-                self.push(if b { 1 } else { 0 });
+                self.push(if !b { 1 } else { 0 });
             }
             Operator::Add => {
                 let rhs = self.pop().unwrap();
@@ -300,7 +300,10 @@ fn str_select_test() {
 
 #[test]
 fn if_test() {
-    try_test("1 { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }", "2@4@");
+    try_test(
+        "1 ~ { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }",
+        "3@4@",
+    );
 }
 
 #[test]
