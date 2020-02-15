@@ -172,10 +172,10 @@ impl<'s, 'b> Parser<'s, 'b> {
                     let back = self.lexer;
                     match self.next_token()? {
                         Some(Token::Else) => {
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
                             self.push(Instruction::EndBlock);
                             let endif = self.next_pos();
                             self.push(Instruction::Nop);
+                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
 
                             match self.expect_next_token()? {
                                 Token::OpenBrace => {
@@ -244,7 +244,6 @@ impl<'s, 'b> Parser<'s, 'b> {
         loop {
             match self.expect_next_token()? {
                 token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
-
                     self.push(Instruction::Duplicate);
                     self.process_token(token);
                     self.push(Instruction::Operator(Operator::Equal));
@@ -253,17 +252,15 @@ impl<'s, 'b> Parser<'s, 'b> {
 
                     loop {
                         match self.expect_next_token()? {
-                            Token::Operator(Operator::Or) => {
-                                match self.expect_next_token()? {
-                                    token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
-                                        self.push(Instruction::Duplicate);
-                                        self.process_token(token);
-                                        self.push(Instruction::Operator(Operator::Equal));
-                                        self.push(Instruction::Operator(Operator::Or));
-                                    }
-                                    token => return Err(self.make_unexpected_token_err(token)),
+                            Token::Operator(Operator::Or) => match self.expect_next_token()? {
+                                token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
+                                    self.push(Instruction::Duplicate);
+                                    self.process_token(token);
+                                    self.push(Instruction::Operator(Operator::Equal));
+                                    self.push(Instruction::Operator(Operator::Or));
                                 }
-                            }
+                                token => return Err(self.make_unexpected_token_err(token)),
+                            },
                             Token::OpenBrace => {
                                 self.process_block()?;
 
@@ -421,7 +418,7 @@ fn parse_if_else_test() {
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Less),
-            Instruction::GotoIfNot(8),
+            Instruction::GotoIfNot(10),
             Instruction::StartBlock,
             Instruction::LoadStr("1은 2보다 작다"),
             Instruction::PrintLine,
@@ -430,7 +427,7 @@ fn parse_if_else_test() {
             Instruction::LoadInt(2),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(17),
+            Instruction::GotoIfNot(19),
             Instruction::StartBlock,
             Instruction::LoadStr("2와 2는 같다"),
             Instruction::PrintLine,
@@ -439,7 +436,7 @@ fn parse_if_else_test() {
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Greater),
-            Instruction::GotoIfNot(26),
+            Instruction::GotoIfNot(28),
             Instruction::StartBlock,
             Instruction::LoadStr("1은 2보다 크다"),
             Instruction::PrintLine,
@@ -457,31 +454,34 @@ fn parse_if_else_test() {
 
 #[test]
 fn parse_double_if() {
-    parse_test("1 { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }", &[
-        Instruction::StartBlock,
-        Instruction::LoadInt(1),
-        Instruction::GotoIfNot(6),
-        Instruction::StartBlock,
-        Instruction::LoadStr("2"),
-        Instruction::PrintLine,
-        Instruction::EndBlock,
-        Instruction::Goto(12),
-        Instruction::StartBlock,
-        Instruction::LoadStr("3"),
-        Instruction::PrintLine,
-        Instruction::EndBlock,
-        Instruction::LoadInt(0),
-        Instruction::GotoIfNot(17),
-        Instruction::StartBlock,
-        Instruction::LoadStr("3"),
-        Instruction::PrintLine,
-        Instruction::EndBlock,
-        Instruction::Goto(23),
-        Instruction::StartBlock,
-        Instruction::LoadStr("4"),
-        Instruction::PrintLine,
-        Instruction::EndBlock,
-    ]);
+    parse_test(
+        "1 { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }",
+        &[
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::GotoIfNot(8),
+            Instruction::StartBlock,
+            Instruction::LoadStr("2"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::Goto(12),
+            Instruction::StartBlock,
+            Instruction::LoadStr("3"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::LoadInt(0),
+            Instruction::GotoIfNot(19),
+            Instruction::StartBlock,
+            Instruction::LoadStr("3"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::Goto(23),
+            Instruction::StartBlock,
+            Instruction::LoadStr("4"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+        ],
+    );
 }
 
 #[test]
@@ -658,7 +658,7 @@ fn parse_nested_block_with_loop() {
             Instruction::Operator(Operator::Add),
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(12),
+            Instruction::GotoIfNot(14),
             Instruction::StartBlock,
             Instruction::LoadStr("4"),
             Instruction::EndBlock,
