@@ -61,18 +61,6 @@ impl<'s, 'b> Parser<'s, 'b> {
         self.bump.alloc_str(s)
     }
 
-    fn move_next_open_brace(&mut self) -> Result<()> {
-        loop {
-            let state = self.step()?;
-
-            if state == State::OpenBrace {
-                break Ok(());
-            } else if state == State::End {
-                return Err(Error::UnexpectedEndOfToken);
-            }
-        }
-    }
-
     fn make_unexpected_token_err(&self, tok: Token) -> Error {
         Error::UnexpectedToken(format!("{:?}", tok), self.lexer.line())
     }
@@ -203,7 +191,7 @@ impl<'s, 'b> Parser<'s, 'b> {
 
                             self.ret[endif] = Instruction::Goto(self.next_pos());
                         }
-                        Some(token) => {
+                        Some(..) => {
                             self.lexer = back;
                             self.push(Instruction::EndBlock);
                             self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
@@ -465,6 +453,35 @@ fn parse_if_else_test() {
             Instruction::PrintLine,
         ],
     );
+}
+
+#[test]
+fn parse_double_if() {
+    parse_test("1 { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }", &[
+        Instruction::StartBlock,
+        Instruction::LoadInt(1),
+        Instruction::GotoIfNot(6),
+        Instruction::StartBlock,
+        Instruction::LoadStr("2"),
+        Instruction::PrintLine,
+        Instruction::EndBlock,
+        Instruction::Goto(12),
+        Instruction::StartBlock,
+        Instruction::LoadStr("3"),
+        Instruction::PrintLine,
+        Instruction::EndBlock,
+        Instruction::LoadInt(0),
+        Instruction::GotoIfNot(17),
+        Instruction::StartBlock,
+        Instruction::LoadStr("3"),
+        Instruction::PrintLine,
+        Instruction::EndBlock,
+        Instruction::Goto(23),
+        Instruction::StartBlock,
+        Instruction::LoadStr("4"),
+        Instruction::PrintLine,
+        Instruction::EndBlock,
+    ]);
 }
 
 #[test]
