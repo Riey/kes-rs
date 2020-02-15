@@ -11,32 +11,39 @@ use std::fmt::Write;
 pub struct Context<'c> {
     pub bump: &'c Bump,
     pub instructions: &'c [Instruction<'c>],
-    pub stack: Vec<'c, Value<'c>>,
+    pub stack: Vec<'c, Vec<'c, Value<'c>>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
-    mark: Vec<'c, usize>,
     cursor: usize,
 }
 
 impl<'c> Context<'c> {
     pub fn new(bump: &'c Bump, instructions: &'c [Instruction<'c>]) -> Self {
-        Self {
+        let mut ret = Self {
             bump,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             variables: AHashMap::new(),
-            mark: Vec::with_capacity_in(10, bump),
             cursor: 0,
-        }
+        };
+
+        ret.stack.push(Vec::with_capacity_in(10, bump));
+
+        ret
+    }
+
+    #[inline]
+    pub fn current_block(&mut self) -> &mut Vec<'c, Value<'c>> {
+        self.stack.last_mut().unwrap()
     }
 
     #[inline]
     pub fn push(&mut self, v: impl Into<Value<'c>>) {
-        self.stack.push(v.into());
+        self.current_block().push(v.into());
     }
 
     #[inline]
     pub fn pop(&mut self) -> Option<Value<'c>> {
-        self.stack.pop()
+        self.current_block().pop()
     }
 
     #[inline]
@@ -44,12 +51,12 @@ impl<'c> Context<'c> {
     where
         T::Error: std::fmt::Debug,
     {
-        self.pop().unwrap().try_into().unwrap()
+        self.current_block().pop().unwrap().try_into().unwrap()
     }
 
     #[inline]
-    pub fn peek(&self) -> Option<&Value<'c>> {
-        self.stack.last()
+    pub fn peek(&mut self) -> Option<&mut Value<'c>> {
+        self.current_block().last_mut()
     }
 
     #[inline]
@@ -175,7 +182,7 @@ impl<'c> Context<'c> {
     }
 
     pub fn flush_print<B: Builtin>(&mut self, builtin: &mut B) {
-        for v in self.stack.drain(..) {
+        for v in self.current_block().drain(..) {
             builtin.print(v);
         }
     }
@@ -213,17 +220,20 @@ impl<'c> Context<'c> {
                     return;
                 }
             }
-            Instruction::MarkStack => {
-                self.mark.push(self.stack.len() - 1);
+            Instruction::StartBlock => {
+                self.stack.push(Vec::with_capacity_in(10, self.bump()));
             }
-            Instruction::RemoveMarked => {
-                self.stack.remove(self.mark.pop().unwrap());
+            Instruction::EndBlock => {
+                self.stack.pop();
             }
-            Instruction::NewLine => {
+            Instruction::Print => {
+                self.flush_print(builtin);
+            }
+            Instruction::PrintLine => {
                 self.flush_print(builtin);
                 builtin.new_line();
             }
-            Instruction::Wait => {
+            Instruction::PrintWait => {
                 self.flush_print(builtin);
                 builtin.new_line();
                 builtin.wait();
@@ -252,38 +262,47 @@ impl<'c> Context<'c> {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
             self.run_instruction(&mut builtin, instruction);
         }
-
-        self.flush_print(&mut builtin);
     }
 }
 
-#[test]
-fn str_select_test() {
+#[cfg(test)]
+fn try_test(code: &str, expected: &str) {
     use crate::builtin::RecordBuiltin;
     use crate::parser::parse;
+    use pretty_assertions::assert_eq;
+
     let bump = Bump::with_capacity(8196);
-    let instructions = parse(
-        &bump,
-        "
-선택 '2' {
-    '1' {
-        3
-    }
-    '2' {
-        4
-    }
-    그외 {
-        5
-    }
-}
-",
-    )
-    .unwrap();
+    let instructions = parse(&bump, code).unwrap();
 
     let mut builtin = RecordBuiltin::new();
     let ctx = Context::new(&bump, &instructions);
 
     ctx.run(&mut builtin);
 
-    assert_eq!(builtin.text(), "4");
+    assert_eq!(builtin.text(), expected);
+}
+
+#[test]
+fn str_select_test() {
+    try_test(
+        "
+선택 '2' {
+    '1' {
+        3:
+    }
+    '2' {
+        4:
+    }
+    그외 {
+        5:
+    }
+}
+",
+        "4",
+    );
+}
+
+#[test]
+fn loop_test() {
+    try_test("1 [$0] 반복 $0 10 < { $0: $0 1 + [$0] } $0:", "12345678910");
 }

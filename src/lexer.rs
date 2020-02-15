@@ -216,6 +216,7 @@ impl<'s> Iterator for Lexer<'s> {
             '}' => Some(Ok(Token::CloseBrace)),
             '#' => Some(Ok(Token::Sharp)),
             '@' => Some(Ok(Token::At)),
+            ':' => Some(Ok(Token::Colon)),
             ch => Some(Err(self.make_char_err(ch))),
         }
     }

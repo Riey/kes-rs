@@ -24,6 +24,8 @@ pub enum Token<'s> {
     OpenBrace,
     /// }
     CloseBrace,
+    /// :
+    Colon,
     /// #
     Sharp,
     /// @
