@@ -208,6 +208,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                     self.process_if_block()?;
                 }
                 State::Loop => self.process_loop_block()?,
+                State::Select => self.process_select_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
             }
         }
