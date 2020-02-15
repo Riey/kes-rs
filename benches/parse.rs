@@ -9,7 +9,7 @@ pub fn throughput_short_bench(c: &mut Criterion) {
     group.bench_with_input("parse", &input, |b, i| {
         let mut bump = Bump::with_capacity(8196);
         b.iter(|| {
-            let insts = parse(&bump, i);
+            let insts = parse(&bump, i).unwrap();
             assert!(!insts.is_empty());
             drop(insts);
             bump.reset();
@@ -25,7 +25,7 @@ pub fn throughput_long_bench(c: &mut Criterion) {
     group.bench_with_input("parse", &input, |b, i| {
         let mut bump = Bump::with_capacity(1024 * 1024);
         b.iter(|| {
-            let insts = parse(&bump, i);
+            let insts = parse(&bump, i).unwrap();
             assert!(!insts.is_empty());
             drop(insts);
             bump.reset();
