@@ -1,8 +1,7 @@
 use crate::instruction::Instruction;
 use crate::lexer::Lexer;
-use crate::token::Token;
-#[cfg(test)]
 use crate::operator::Operator;
+use crate::token::Token;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 
@@ -95,6 +94,16 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
+    fn expect_next_close_brace(&mut self) -> Result<()> {
+        match self.expect_next_token()? {
+            Token::CloseBrace => Ok(()),
+            token => Err(Error::UnexpectedToken(
+                format!("{:?}가 아니라 }}가 와야합니다", token),
+                self.lexer.line(),
+            )),
+        }
+    }
+
     fn process_token(&mut self, token: Token) -> Option<State> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
@@ -139,12 +148,12 @@ impl<'s, 'b> Parser<'s, 'b> {
 
     fn expect_none_state(&mut self, token: Token<'s>) -> Result<()> {
         match self.process_token(token) {
-            Some(state) => Err(self.make_unexpected_token_err(token)),
+            Some(state) => Err(self.make_unexpected_state_err(state)),
             None => Ok(()),
         }
     }
 
-    fn process_else_block(&mut self) -> Result<()> {
+    fn process_block(&mut self) -> Result<()> {
         self.push(Instruction::StartBlock);
 
         loop {
@@ -155,6 +164,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                 }
                 State::OpenBrace => self.process_if_block()?,
                 State::Loop => self.process_loop_block()?,
+                State::Select => self.process_select_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
             }
         }
@@ -171,29 +181,39 @@ impl<'s, 'b> Parser<'s, 'b> {
         loop {
             match self.step()? {
                 State::CloseBrace => {
-                    self.push(Instruction::EndBlock);
-                    self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-                    break Ok(());
-                }
-                State::Else => {
-                    self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-                    self.push(Instruction::EndBlock);
-                    let endif = self.next_pos();
-                    self.push(Instruction::Nop);
+                    let back = self.lexer;
+                    match self.next_token()? {
+                        Some(Token::Else) => {
+                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
+                            self.push(Instruction::EndBlock);
+                            let endif = self.next_pos();
+                            self.push(Instruction::Nop);
 
-                    match self.expect_next_token()? {
-                        Token::OpenBrace => {
-                            self.process_else_block()?;
+                            match self.expect_next_token()? {
+                                Token::OpenBrace => {
+                                    self.process_block()?;
+                                }
+                                token => {
+                                    // else if
+                                    self.expect_none_state(token)?;
+                                    self.read_until_open_brace()?;
+                                    self.process_if_block()?;
+                                }
+                            }
+
+                            self.ret[endif] = Instruction::Goto(self.next_pos());
                         }
-                        token => {
-                            // else if
-                            self.expect_none_state(token)?;
-                            self.read_until_open_brace()?;
-                            self.process_if_block()?;
+                        Some(token) => {
+                            self.lexer = back;
+                            self.push(Instruction::EndBlock);
+                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
+                        }
+                        None => {
+                            self.push(Instruction::EndBlock);
+                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
                         }
                     }
 
-                    self.ret[endif] = Instruction::Goto(self.next_pos());
                     break Ok(());
                 }
                 State::OpenBrace => {
@@ -228,6 +248,68 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
+    fn process_select_block(&mut self) -> Result<()> {
+        let mut end_select_buf = Vec::with_capacity_in(50, self.bump);
+        self.push(Instruction::StartBlock);
+        self.read_until_open_brace()?;
+
+        loop {
+            match self.expect_next_token()? {
+                token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
+
+                    self.push(Instruction::Duplicate);
+                    self.process_token(token);
+                    self.push(Instruction::Operator(Operator::Equal));
+                    let end_arm = self.next_pos();
+                    self.push(Instruction::Nop);
+
+                    loop {
+                        match self.expect_next_token()? {
+                            Token::Operator(Operator::Or) => {
+                                match self.expect_next_token()? {
+                                    token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
+                                        self.push(Instruction::Duplicate);
+                                        self.process_token(token);
+                                        self.push(Instruction::Operator(Operator::Equal));
+                                        self.push(Instruction::Operator(Operator::Or));
+                                    }
+                                    token => return Err(self.make_unexpected_token_err(token)),
+                                }
+                            }
+                            Token::OpenBrace => {
+                                self.process_block()?;
+
+                                end_select_buf.push(self.next_pos());
+                                self.push(Instruction::Nop);
+                                break;
+                            }
+                            token => return Err(self.make_unexpected_token_err(token)),
+                        }
+                    }
+
+                    self.ret[end_arm] = Instruction::GotoIfNot(self.next_pos());
+                }
+                Token::CloseBrace => {
+                    break;
+                }
+                Token::Else => {
+                    self.expect_next_open_brace()?;
+                    self.process_block()?;
+                    self.expect_next_close_brace()?;
+                    break;
+                }
+                token => return Err(self.make_unexpected_token_err(token)),
+            }
+        }
+
+        for end_select in end_select_buf {
+            self.ret[end_select] = Instruction::Goto(self.next_pos());
+        }
+
+        self.push(Instruction::EndBlock);
+        Ok(())
+    }
+
     fn process(&mut self) -> Result<()> {
         loop {
             match self.step()? {
@@ -236,6 +318,9 @@ impl<'s, 'b> Parser<'s, 'b> {
                 }
                 State::Loop => {
                     self.process_loop_block()?;
+                }
+                State::Select => {
+                    self.process_select_block()?;
                 }
                 State::End => break Ok(()),
                 state => break Err(self.make_unexpected_state_err(state)),
@@ -344,29 +429,38 @@ fn parse_if_else_test() {
 'foo'@
 ",
         &[
+            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Less),
-            Instruction::GotoIfNot(7),
+            Instruction::GotoIfNot(8),
+            Instruction::StartBlock,
             Instruction::LoadStr("1은 2보다 작다"),
             Instruction::PrintLine,
-            Instruction::Goto(14),
+            Instruction::EndBlock,
+            Instruction::Goto(32),
             Instruction::LoadInt(2),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(14),
+            Instruction::GotoIfNot(17),
+            Instruction::StartBlock,
             Instruction::LoadStr("2와 2는 같다"),
             Instruction::PrintLine,
-            Instruction::Goto(21),
+            Instruction::EndBlock,
+            Instruction::Goto(32),
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Greater),
-            Instruction::GotoIfNot(21),
+            Instruction::GotoIfNot(26),
+            Instruction::StartBlock,
             Instruction::LoadStr("1은 2보다 크다"),
             Instruction::PrintLine,
-            Instruction::Goto(23),
+            Instruction::EndBlock,
+            Instruction::Goto(32),
+            Instruction::StartBlock,
             Instruction::LoadStr("1은 2와 같다"),
             Instruction::PrintLine,
+            Instruction::EndBlock,
             Instruction::LoadStr("foo"),
             Instruction::PrintLine,
         ],
@@ -386,9 +480,12 @@ fn parse_select_else() {
 ",
         &[
             Instruction::StartBlock,
+            Instruction::StartBlock,
             Instruction::LoadInt(1),
+            Instruction::StartBlock,
             Instruction::LoadStr(""),
             Instruction::PrintLine,
+            Instruction::EndBlock,
             Instruction::EndBlock,
             Instruction::LoadStr(""),
             Instruction::PrintLine,
@@ -425,28 +522,34 @@ fn parse_select() {
             Instruction::Duplicate,
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(13),
+            Instruction::GotoIfNot(14),
             Instruction::StartBlock,
             Instruction::LoadStr("3"),
             Instruction::PrintLine,
-            Instruction::Goto(21),
-            Instruction::Nop,
+            Instruction::EndBlock,
+            Instruction::Goto(36),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(22),
+            Instruction::GotoIfNot(23),
+            Instruction::StartBlock,
             Instruction::LoadStr("2"),
             Instruction::PrintLine,
-            Instruction::Goto(24),
+            Instruction::EndBlock,
+            Instruction::Goto(36),
             Instruction::Duplicate,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(25),
+            Instruction::GotoIfNot(32),
+            Instruction::StartBlock,
             Instruction::LoadStr("1"),
             Instruction::PrintLine,
-            Instruction::Goto(27),
+            Instruction::EndBlock,
+            Instruction::Goto(36),
+            Instruction::StartBlock,
             Instruction::LoadStr("other"),
             Instruction::PrintLine,
+            Instruction::EndBlock,
             Instruction::EndBlock,
             Instruction::LoadStr("foo"),
             Instruction::PrintLine,
@@ -478,15 +581,15 @@ fn parse_select_without_else() {
             Instruction::StartBlock,
             Instruction::LoadInt(2),
             Instruction::EndBlock,
-            Instruction::Goto(18),
+            Instruction::Goto(19),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(18),
+            Instruction::GotoIfNot(19),
             Instruction::StartBlock,
             Instruction::LoadInt(3),
             Instruction::EndBlock,
-            Instruction::Nop,
+            Instruction::Goto(19),
             Instruction::EndBlock,
         ],
     );
@@ -529,18 +632,25 @@ fn parse_nested_block_with_loop() {
 }
     ",
         &[
+            Instruction::StartBlock,
+            Instruction::StartBlock,
             Instruction::LoadInt(0),
-            Instruction::GotoIfNot(12),
+            Instruction::GotoIfNot(18),
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Add),
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(10),
+            Instruction::GotoIfNot(12),
+            Instruction::StartBlock,
             Instruction::LoadStr("4"),
-            Instruction::Goto(11),
+            Instruction::EndBlock,
+            Instruction::Goto(17),
+            Instruction::StartBlock,
             Instruction::LoadStr("5"),
-            Instruction::Goto(0),
+            Instruction::EndBlock,
+            Instruction::Goto(2),
+            Instruction::EndBlock,
         ],
     );
 }

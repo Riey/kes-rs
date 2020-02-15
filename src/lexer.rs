@@ -15,6 +15,7 @@ fn is_not_ident_char(c: char) -> bool {
     !is_ident_char(c)
 }
 
+#[derive(Copy, Clone)]
 pub struct Lexer<'s> {
     text: &'s str,
     line: usize,
