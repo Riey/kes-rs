@@ -18,17 +18,13 @@ pub struct Context<'c> {
 
 impl<'c> Context<'c> {
     pub fn new(bump: &'c Bump, instructions: &'c [Instruction<'c>]) -> Self {
-        let mut ret = Self {
+        Self {
             bump,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             variables: AHashMap::new(),
             cursor: 0,
-        };
-
-        ret.stack.push(Vec::with_capacity_in(10, bump));
-
-        ret
+        }
     }
 
     #[inline]
@@ -300,6 +296,11 @@ fn str_select_test() {
 ",
         "4",
     );
+}
+
+#[test]
+fn if_test() {
+    try_test("1 { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }", "2@4@");
 }
 
 #[test]
