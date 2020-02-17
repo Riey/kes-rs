@@ -32,13 +32,12 @@ impl<'s> Lexer<'s> {
 
     fn skip_ws(&mut self) {
         loop {
+            const WS: &[char] = &[' ', '\t', '\r'];
+            self.text = self.text.trim_start_matches(WS);
             match self.text.as_bytes().get(0) {
                 Some(b'\n') => {
                     self.text = unsafe { self.text.get_unchecked(1..) };
                     self.line += 1;
-                }
-                Some(b' ') => {
-                    self.text = self.text.trim_start_matches(' ');
                 }
                 Some(b';') => {
                     let pos =
