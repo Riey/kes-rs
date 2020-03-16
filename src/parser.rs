@@ -12,6 +12,7 @@ enum State {
     End,
     OpenBrace,
     CloseBrace,
+    If,
     Else,
     Loop,
     Select,
@@ -107,6 +108,7 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::Colon => self.push(Instruction::Print),
             Token::At => self.push(Instruction::PrintLine),
             Token::Sharp => self.push(Instruction::PrintWait),
+            Token::If => return Some(State::If),
             Token::Else => return Some(State::Else),
             Token::OpenBrace => return Some(State::OpenBrace),
             Token::CloseBrace => return Some(State::CloseBrace),
@@ -150,7 +152,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                     self.push(Instruction::EndBlock);
                     break Ok(());
                 }
-                State::OpenBrace => self.process_if_block()?,
+                State::If => self.process_if_block()?,
                 State::Loop => self.process_loop_block()?,
                 State::Select => self.process_select_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
@@ -159,6 +161,8 @@ impl<'s, 'b> Parser<'s, 'b> {
     }
 
     fn process_if_block(&mut self) -> Result<()> {
+        self.read_until_open_brace()?;
+
         let if_top = self.next_pos();
         // goto endif
         self.push(Instruction::Nop);
@@ -184,7 +188,6 @@ impl<'s, 'b> Parser<'s, 'b> {
                                 token => {
                                     // else if
                                     self.expect_none_state(token)?;
-                                    self.read_until_open_brace()?;
                                     self.process_if_block()?;
                                 }
                             }
@@ -204,7 +207,7 @@ impl<'s, 'b> Parser<'s, 'b> {
 
                     break Ok(());
                 }
-                State::OpenBrace => {
+                State::If => {
                     self.process_if_block()?;
                 }
                 State::Loop => self.process_loop_block()?,
@@ -230,7 +233,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                     self.push(Instruction::EndBlock);
                     break Ok(());
                 }
-                State::OpenBrace => self.process_if_block()?,
+                State::If => self.process_if_block()?,
                 State::Loop => self.process_loop_block()?,
                 state => break Err(self.make_unexpected_state_err(state)),
             }
@@ -299,7 +302,7 @@ impl<'s, 'b> Parser<'s, 'b> {
     fn process(&mut self) -> Result<()> {
         loop {
             match self.step()? {
-                State::OpenBrace => {
+                State::If => {
                     self.process_if_block()?;
                 }
                 State::Loop => {
@@ -375,7 +378,7 @@ fn parse_assign() {
 fn parse_if_test() {
     parse_test(
         "
-1 2 < {
+만약 1 2 < {
     '1은 2보다 작다'@
 }
 '3 + 4 = ' 3 4 + @
@@ -403,7 +406,7 @@ fn parse_if_test() {
 fn parse_if_else_test() {
     parse_test(
         "
-1 2 < {
+만약 1 2 < {
     '1은 2보다 작다'@
 } 그외 2 2 == {
     '2와 2는 같다'@
@@ -456,7 +459,7 @@ fn parse_if_else_test() {
 #[test]
 fn parse_double_if() {
     parse_test(
-        "1 ~ { '2'@ } 그외 { '3'@ } 0 { '3'@ } 그외 {  '4'@ }",
+        "만약 1 ~ { '2'@ } 그외 { '3'@ } 만약 0 { '3'@ } 그외 {  '4'@ }",
         &[
             Instruction::StartBlock,
             Instruction::LoadInt(1),
