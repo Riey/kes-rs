@@ -204,7 +204,9 @@ impl<'c> Context<'c> {
                 let item = self.pop().unwrap();
                 self.variables.insert(name, item);
             }
-            Instruction::LoadBuiltin(name) => builtin.load(name, self),
+            Instruction::LoadBuiltin(name) => {
+                self.push(builtin.load(name, self.bump));
+            }
             Instruction::CallBuiltin(name) => {
                 builtin.run(name, self);
                 self.stack.pop();

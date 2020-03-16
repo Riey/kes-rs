@@ -12,7 +12,7 @@ impl Builtin for StdioBuiltin {
         unimplemented!();
     }
     #[inline]
-    fn load(&mut self, _name: &str, _ctx: &mut Context) {
+    fn load<'b>(&mut self, _name: &str, _b: &'b Bump) -> Value<'b> {
         unimplemented!();
     }
     #[inline]
