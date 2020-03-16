@@ -1,6 +1,6 @@
 [package]
 name = "kes"
-version = "0.7.1"
+version = "0.8.0"
 authors = ["Riey <creeper844@gmail.com>"]
 edition = "2018"
 description = "Korean Era Script"
