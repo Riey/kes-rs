@@ -646,7 +646,7 @@ fn parse_nested_block_with_loop() {
     parse_test(
         "
 반복 0 {
-    1 2 + 3 == {
+    만약 1 2 + 3 == {
         '4'
     } 그외 {
         '5'
