@@ -53,12 +53,12 @@ impl<'s, 'b> Parser<'s, 'b> {
         self.lexer.next().transpose()
     }
 
-    #[inline(always)]
+    #[inline]
     fn expect_next_token(&mut self) -> Result<Token<'s>> {
         self.lexer.next().ok_or(Error::UnexpectedEndOfToken)?
     }
 
-    #[inline(always)]
+    #[inline]
     fn intern(&self, s: &str) -> &'b str {
         self.bump.alloc_str(s)
     }
@@ -157,6 +157,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                 State::If => self.process_if_block()?,
                 State::Loop => self.process_loop_block()?,
                 State::Select => self.process_select_block()?,
+                State::Call => self.process_call_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
             }
         }
@@ -209,6 +210,7 @@ impl<'s, 'b> Parser<'s, 'b> {
 
                     break Ok(());
                 }
+                State::Call => self.process_call_block()?,
                 State::If => {
                     self.process_if_block()?;
                 }
@@ -301,9 +303,24 @@ impl<'s, 'b> Parser<'s, 'b> {
         Ok(())
     }
 
+    fn process_call_block(&mut self) -> Result<()> {
+        let func = match self.expect_next_token()? {
+            Token::Builtin(name) => name,
+            other => return Err(self.make_unexpected_token_err(other)),
+        };
+
+        self.expect_next_open_brace()?;
+        self.process_block()?;
+        *self.ret.last_mut().unwrap() = Instruction::CallBuiltin(self.intern(func));
+        Ok(())
+    }
+
     fn process(&mut self) -> Result<()> {
         loop {
             match self.step()? {
+                State::Call => {
+                    self.process_call_block()?;
+                }
                 State::If => {
                     self.process_if_block()?;
                 }
@@ -652,7 +669,17 @@ fn parse_call() {
 }
 5 +
 ",
-        &[],
+        &[
+            Instruction::StartBlock,
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Add),
+            Instruction::LoadInt(4),
+            Instruction::CallBuiltin("더하기"),
+            Instruction::LoadInt(5),
+            Instruction::Operator(Operator::Add),
+        ],
     );
 }
 
