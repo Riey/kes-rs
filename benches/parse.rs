@@ -18,7 +18,7 @@ pub fn throughput_short_bench(c: &mut Criterion) {
 }
 
 pub fn throughput_long_bench(c: &mut Criterion) {
-    let input = "1 2 + [$1] $1 { 123 } 그외 { 선택 $1 { 2 { } 그외 { } } }".repeat(100);
+    let input = "만약 1 2 + [$1] $1 { 123 } 그외 { 선택 $1 { 2 { } 그외 { } } }".repeat(100);
 
     let mut group = c.benchmark_group("throughput-long");
     group.throughput(Throughput::Bytes(input.len() as u64));
