@@ -2,6 +2,8 @@ use crate::operator::Operator;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Token<'s> {
+    /// 만약
+    If,
     /// 그외
     Else,
     /// 선택
