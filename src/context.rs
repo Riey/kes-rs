@@ -188,7 +188,7 @@ impl<'c> Context<'c> {
         self.bump
     }
 
-    pub fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) {
+    pub async fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
@@ -208,7 +208,7 @@ impl<'c> Context<'c> {
                 self.push(builtin.load(name, self.bump));
             }
             Instruction::CallBuiltin(name) => {
-                builtin.run(name, self);
+                builtin.run(name, self).await;
                 self.stack.pop();
             }
             Instruction::Operator(op) => self.run_operator(op),
@@ -238,7 +238,7 @@ impl<'c> Context<'c> {
             Instruction::PrintWait => {
                 self.flush_print(builtin);
                 builtin.new_line();
-                builtin.wait();
+                builtin.wait().await;
             }
             Instruction::Duplicate => {
                 let item = self.peek().copied().unwrap();
@@ -260,9 +260,9 @@ impl<'c> Context<'c> {
         self.cursor += 1;
     }
 
-    pub fn run<B: Builtin>(mut self, mut builtin: B) {
+    pub async fn run<B: Builtin>(mut self, mut builtin: B) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            self.run_instruction(&mut builtin, instruction);
+            self.run_instruction(&mut builtin, instruction).await;
         }
     }
 }
@@ -279,7 +279,7 @@ fn try_test(code: &str, expected: &str) {
     let mut builtin = RecordBuiltin::new();
     let ctx = Context::new(&bump, &instructions);
 
-    ctx.run(&mut builtin);
+    futures::executor::block_on(ctx.run(&mut builtin));
 
     assert_eq!(builtin.text(), expected);
 }
