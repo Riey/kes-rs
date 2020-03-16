@@ -183,7 +183,7 @@ impl<'c> Context<'c> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn bump(&self) -> &'c Bump {
         self.bump
     }

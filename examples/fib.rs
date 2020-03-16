@@ -7,23 +7,23 @@ use kes::value::Value;
 pub struct StdioBuiltin;
 
 impl Builtin for StdioBuiltin {
-    #[inline(always)]
+    #[inline]
     fn run(&mut self, _name: &str, _ctx: &mut Context) {
         unimplemented!();
     }
-    #[inline(always)]
+    #[inline]
     fn load(&mut self, _name: &str, _ctx: &mut Context) {
         unimplemented!();
     }
-    #[inline(always)]
+    #[inline]
     fn print(&mut self, v: Value) {
         print!("{}", v);
     }
-    #[inline(always)]
+    #[inline]
     fn new_line(&mut self) {
         println!();
     }
-    #[inline(always)]
+    #[inline]
     fn wait(&mut self) {
         let mut buf = String::new();
         std::io::stdin().read_line(&mut buf).unwrap();

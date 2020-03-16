@@ -38,17 +38,17 @@ impl<'s, 'b> Parser<'s, 'b> {
         ret
     }
 
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, instruction: Instruction<'b>) {
         self.ret.push(instruction);
     }
 
-    #[inline(always)]
+    #[inline]
     fn next_pos(&self) -> usize {
         self.ret.len()
     }
 
-    #[inline(always)]
+    #[inline]
     fn next_token(&mut self) -> Result<Option<Token<'s>>> {
         self.lexer.next().transpose()
     }

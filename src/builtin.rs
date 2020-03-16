@@ -10,23 +10,23 @@ pub trait Builtin {
 }
 
 impl<'a, B: Builtin> Builtin for &'a mut B {
-    #[inline(always)]
+    #[inline]
     fn run(&mut self, name: &str, ctx: &mut Context) {
         (**self).run(name, ctx);
     }
-    #[inline(always)]
+    #[inline]
     fn load(&mut self, name: &str, ctx: &mut Context) {
         (**self).run(name, ctx);
     }
-    #[inline(always)]
+    #[inline]
     fn print(&mut self, v: Value) {
         (**self).print(v);
     }
-    #[inline(always)]
+    #[inline]
     fn new_line(&mut self) {
         (**self).new_line();
     }
-    #[inline(always)]
+    #[inline]
     fn wait(&mut self) {
         (**self).wait();
     }
@@ -35,52 +35,52 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
 pub struct DummyBuiltin;
 
 impl Builtin for DummyBuiltin {
-    #[inline(always)]
+    #[inline]
     fn run(&mut self, _name: &str, _ctx: &mut Context) {}
-    #[inline(always)]
+    #[inline]
     fn load(&mut self, _name: &str, _ctx: &mut Context) {}
-    #[inline(always)]
+    #[inline]
     fn print(&mut self, _v: Value) {}
-    #[inline(always)]
+    #[inline]
     fn new_line(&mut self) {}
-    #[inline(always)]
+    #[inline]
     fn wait(&mut self) {}
 }
 
 pub struct RecordBuiltin(String);
 
 impl RecordBuiltin {
-    #[inline(always)]
+    #[inline]
     pub fn new() -> Self {
         Self(String::with_capacity(8196))
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn text(&self) -> &str {
         &self.0
     }
 }
 
 impl Builtin for RecordBuiltin {
-    #[inline(always)]
+    #[inline]
     fn run(&mut self, name: &str, _ctx: &mut Context) {
         self.0.push_str(name);
     }
-    #[inline(always)]
+    #[inline]
     fn load(&mut self, name: &str, _ctx: &mut Context) {
         use std::fmt::Write;
         write!(self.0, "${}", name).unwrap();
     }
-    #[inline(always)]
+    #[inline]
     fn print(&mut self, v: Value) {
         use std::fmt::Write;
         write!(self.0, "{}", v).unwrap();
     }
-    #[inline(always)]
+    #[inline]
     fn new_line(&mut self) {
         self.0.push('@');
     }
-    #[inline(always)]
+    #[inline]
     fn wait(&mut self) {
         self.0.push('#');
     }
