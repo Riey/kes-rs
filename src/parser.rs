@@ -642,6 +642,20 @@ fn parse_loop_test() {
     );
 }
 
+#[test]
+fn parse_call() {
+    parse_test(
+        "
+호출 더하기 {
+    1 2 +
+    4
+}
+5 +
+",
+        &[],
+    );
+}
+
 // Issue #1
 #[test]
 fn parse_nested_block_with_loop() {
