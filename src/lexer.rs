@@ -123,7 +123,9 @@ impl<'s> Lexer<'s> {
     }
 
     fn try_read_keyword(&mut self) -> Result<Option<Token<'s>>> {
-        if self.try_strip_prefix("만약") {
+        if self.try_strip_prefix("호출") {
+            Ok(Some(Token::Call))
+        } else if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
         } else if self.try_strip_prefix("그외") {
             Ok(Some(Token::Else))

@@ -16,6 +16,7 @@ enum State {
     Else,
     Loop,
     Select,
+    Call,
 }
 
 struct Parser<'s, 'b> {
@@ -114,6 +115,7 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::CloseBrace => return Some(State::CloseBrace),
             Token::Loop => return Some(State::Loop),
             Token::Select => return Some(State::Select),
+            Token::Call => return Some(State::Call),
         }
 
         None
