@@ -208,8 +208,11 @@ impl<'c> Context<'c> {
                 self.push(builtin.load(name, self.bump));
             }
             Instruction::CallBuiltin(name) => {
-                builtin.run(name, self).await;
+                let ret = builtin.run(name, self).await;
                 self.stack.pop();
+                if let Some(ret) = ret {
+                    self.push(ret);
+                }
             }
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {

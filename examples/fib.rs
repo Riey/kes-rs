@@ -10,7 +10,7 @@ pub struct StdioBuiltin;
 #[async_trait(?Send)]
 impl Builtin for StdioBuiltin {
     #[inline]
-    async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) {
+    async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
         unimplemented!();
     }
     #[inline]

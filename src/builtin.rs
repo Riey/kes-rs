@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 #[async_trait(?Send)]
 pub trait Builtin {
-    async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>);
+    async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) -> Option<Value<'c>>;
     fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b>;
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
@@ -15,8 +15,8 @@ pub trait Builtin {
 #[async_trait(?Send)]
 impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
-    async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) {
-        (**self).run(name, ctx).await;
+    async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
+        (**self).run(name, ctx).await
     }
     #[inline]
     fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b> {
@@ -41,7 +41,9 @@ pub struct DummyBuiltin;
 #[async_trait(?Send)]
 impl Builtin for DummyBuiltin {
     #[inline]
-    async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) {}
+    async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
+        None
+    }
     #[inline]
     fn load<'b>(&mut self, _name: &str, _b: &'b Bump) -> Value<'b> {
         Value::Int(0)
@@ -71,8 +73,9 @@ impl RecordBuiltin {
 #[async_trait(?Send)]
 impl Builtin for RecordBuiltin {
     #[inline]
-    async fn run<'c>(&mut self, name: &'_ str, _ctx: &'_ mut Context<'c>) {
+    async fn run<'c>(&mut self, name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
         self.0.push_str(name);
+        None
     }
     #[inline]
     fn load<'b>(&mut self, name: &str, _b: &'b Bump) -> Value<'b> {
