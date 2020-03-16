@@ -11,6 +11,7 @@ pub enum Instruction<'s> {
     LoadStr(&'s str),
     LoadVar(&'s str),
     StoreVar(&'s str),
+    LoadBuiltin(&'s str),
     CallBuiltin(&'s str),
     Print,
     PrintLine,

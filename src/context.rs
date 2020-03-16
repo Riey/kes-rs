@@ -204,7 +204,11 @@ impl<'c> Context<'c> {
                 let item = self.pop().unwrap();
                 self.variables.insert(name, item);
             }
-            Instruction::CallBuiltin(name) => builtin.run(name, self),
+            Instruction::LoadBuiltin(name) => builtin.load(name, self),
+            Instruction::CallBuiltin(name) => {
+                builtin.run(name, self);
+                self.stack.pop();
+            }
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
                 self.cursor = pos;

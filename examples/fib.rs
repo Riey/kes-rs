@@ -12,6 +12,10 @@ impl Builtin for StdioBuiltin {
         unimplemented!();
     }
     #[inline(always)]
+    fn load(&mut self, _name: &str, _ctx: &mut Context) {
+        unimplemented!();
+    }
+    #[inline(always)]
     fn print(&mut self, v: Value) {
         print!("{}", v);
     }

@@ -3,6 +3,7 @@ use crate::value::Value;
 
 pub trait Builtin {
     fn run(&mut self, name: &str, ctx: &mut Context);
+    fn load(&mut self, name: &str, ctx: &mut Context);
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
     fn wait(&mut self);
@@ -11,6 +12,10 @@ pub trait Builtin {
 impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline(always)]
     fn run(&mut self, name: &str, ctx: &mut Context) {
+        (**self).run(name, ctx);
+    }
+    #[inline(always)]
+    fn load(&mut self, name: &str, ctx: &mut Context) {
         (**self).run(name, ctx);
     }
     #[inline(always)]
@@ -32,6 +37,8 @@ pub struct DummyBuiltin;
 impl Builtin for DummyBuiltin {
     #[inline(always)]
     fn run(&mut self, _name: &str, _ctx: &mut Context) {}
+    #[inline(always)]
+    fn load(&mut self, _name: &str, _ctx: &mut Context) {}
     #[inline(always)]
     fn print(&mut self, _v: Value) {}
     #[inline(always)]
@@ -58,6 +65,11 @@ impl Builtin for RecordBuiltin {
     #[inline(always)]
     fn run(&mut self, name: &str, _ctx: &mut Context) {
         self.0.push_str(name);
+    }
+    #[inline(always)]
+    fn load(&mut self, name: &str, _ctx: &mut Context) {
+        use std::fmt::Write;
+        write!(self.0, "${}", name).unwrap();
     }
     #[inline(always)]
     fn print(&mut self, v: Value) {
