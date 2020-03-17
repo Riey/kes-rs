@@ -372,13 +372,13 @@ fn parse_builtin_in_if() {
         만약 테스트 { 1 } 2
         ",
         &[
-        Instruction::StartBlock,
-        Instruction::LoadBuiltin("테스트"),
-        Instruction::GotoIfNot(6),
-        Instruction::StartBlock,
-        Instruction::LoadInt(1),
-        Instruction::EndBlock,
-        Instruction::LoadInt(2),
+            Instruction::StartBlock,
+            Instruction::LoadBuiltin("테스트"),
+            Instruction::GotoIfNot(6),
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::EndBlock,
+            Instruction::LoadInt(2),
         ],
     );
 }
