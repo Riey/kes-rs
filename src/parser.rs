@@ -144,13 +144,6 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
-    fn expect_none_state(&mut self, token: Token<'s>) -> Result<()> {
-        match self.process_token(token) {
-            Some(state) => Err(self.make_unexpected_state_err(state)),
-            None => Ok(()),
-        }
-    }
-
     fn process_block(&mut self) -> Result<()> {
         self.push(Instruction::StartBlock);
 
@@ -169,9 +162,7 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
-    fn process_if_block(&mut self) -> Result<()> {
-        self.read_until_open_brace()?;
-
+    fn process_if_block_inner(&mut self) -> Result<()> {
         let if_top = self.next_pos();
         // goto endif
         self.push(Instruction::Nop);
@@ -190,15 +181,22 @@ impl<'s, 'b> Parser<'s, 'b> {
                             self.push(Instruction::Nop);
                             self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
 
-                            match self.expect_next_token()? {
-                                Token::OpenBrace => {
-                                    self.process_block()?;
+                            let start = self.next_pos();
+
+                            loop {
+                                match self.step()? {
+                                    State::OpenBrace => break,
+                                    State::Call => self.process_call_block()?,
+                                    other => return Err(self.make_unexpected_state_err(other)),
                                 }
-                                token => {
-                                    // else if
-                                    self.expect_none_state(token)?;
-                                    self.process_if_block()?;
-                                }
+                            }
+
+                            let else_if = start != self.next_pos();
+
+                            if else_if {
+                                self.process_if_block_inner()?;
+                            } else {
+                                self.process_block()?;
                             }
 
                             self.ret[endif] = Instruction::Goto(self.next_pos());
@@ -217,14 +215,18 @@ impl<'s, 'b> Parser<'s, 'b> {
                     break Ok(());
                 }
                 State::Call => self.process_call_block()?,
-                State::If => {
-                    self.process_if_block()?;
-                }
+                State::If => self.process_if_block()?,
+
                 State::Loop => self.process_loop_block()?,
                 State::Select => self.process_select_block()?,
                 state => return Err(self.make_unexpected_state_err(state)),
             }
         }
+    }
+
+    fn process_if_block(&mut self) -> Result<()> {
+        self.read_until_open_brace()?;
+        self.process_if_block_inner()
     }
 
     fn process_loop_block(&mut self) -> Result<()> {
@@ -671,6 +673,26 @@ fn parse_call_in_else_if() {
     parse_test(
         "만약 1 { 1 } 그외 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
         &[
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::GotoIfNot(7),
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::EndBlock,
+            Instruction::Goto(19),
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::CallBuiltin("더하기"),
+            Instruction::GotoIfNot(16),
+            Instruction::StartBlock,
+            Instruction::LoadInt(2),
+            Instruction::EndBlock,
+            Instruction::Goto(19),
+            Instruction::StartBlock,
+            Instruction::LoadInt(3),
+            Instruction::EndBlock,
+            Instruction::LoadInt(4),
         ],
     );
 }
