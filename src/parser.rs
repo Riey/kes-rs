@@ -132,9 +132,15 @@ impl<'s, 'b> Parser<'s, 'b> {
     }
 
     fn read_until_open_brace(&mut self) -> Result<()> {
-        match self.step()? {
-            State::OpenBrace => Ok(()),
-            state => Err(self.make_unexpected_state_err(state)),
+        loop {
+            match self.step()? {
+                State::OpenBrace => break Ok(()),
+                State::If => self.process_if_block()?,
+                State::Loop => self.process_loop_block()?,
+                State::Select => self.process_select_block()?,
+                State::Call => self.process_call_block()?,
+                state => break Err(self.make_unexpected_state_err(state)),
+            }
         }
     }
 
