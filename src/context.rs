@@ -265,6 +265,9 @@ impl<'c> Context<'c> {
 
     pub async fn run<B: Builtin>(mut self, mut builtin: B) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
+            #[cfg(features = "logging")]
+            log::trace!("run {:?}", instruction);
+
             self.run_instruction(&mut builtin, instruction).await;
         }
     }

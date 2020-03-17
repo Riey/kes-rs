@@ -14,6 +14,9 @@ readme = "README.md"
 name = "parse"
 harness = false
 
+[features]
+logging = ["log"]
+
 [profile.release]
 debug = true
 
@@ -23,6 +26,7 @@ bumpalo = { version = "3.2.0", features = ["collections"] }
 ahash = "0.3.2"
 thiserror = "1.0.11"
 async-trait = "0.1.24"
+log = { version = "0.4.8", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
