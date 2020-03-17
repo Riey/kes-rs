@@ -103,7 +103,7 @@ impl<'s, 'b> Parser<'s, 'b> {
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
             Token::StrLit(text) => self.push(Instruction::LoadStr(self.intern(text))),
             Token::Variable(ident) => self.push(Instruction::LoadVar(self.intern(ident))),
-            Token::Builtin(ident) => self.push(Instruction::CallBuiltin(self.intern(ident))),
+            Token::Builtin(ident) => self.push(Instruction::LoadBuiltin(self.intern(ident))),
             Token::Assign(ident) => self.push(Instruction::StoreVar(self.intern(ident))),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
             Token::Colon => self.push(Instruction::Print),
