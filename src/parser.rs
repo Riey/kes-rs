@@ -641,7 +641,42 @@ fn parse_select_without_else() {
 fn parse_call_in_if() {
     parse_test(
         "만약 호출 더하기 { 1 2 } { 1 } 그외 { 0 } 2",
-        &[Instruction::StartBlock],
+        &[
+            Instruction::StartBlock,
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::CallBuiltin("더하기"),
+            Instruction::GotoIfNot(10),
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::EndBlock,
+            Instruction::Goto(13),
+            Instruction::StartBlock,
+            Instruction::LoadInt(0),
+            Instruction::EndBlock,
+            Instruction::LoadInt(2),
+        ],
+    );
+}
+
+#[test]
+fn parse_call_in_loop() {
+    parse_test(
+        "반복 호출 더하기 { 1 2 } { 1 } 2",
+        &[
+            Instruction::StartBlock,
+            Instruction::StartBlock,
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::CallBuiltin("더하기"),
+            Instruction::GotoIfNot(9),
+            Instruction::LoadInt(1),
+            Instruction::Goto(2),
+            Instruction::EndBlock,
+            Instruction::LoadInt(2),
+        ],
     );
 }
 
