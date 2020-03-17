@@ -667,6 +667,15 @@ fn parse_call_in_if() {
 }
 
 #[test]
+fn parse_call_in_else_if() {
+    parse_test(
+        "만약 1 { 1 } 그외 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
+        &[
+        ],
+    );
+}
+
+#[test]
 fn parse_call_in_loop() {
     parse_test(
         "반복 호출 더하기 { 1 2 } { 1 } 2",
