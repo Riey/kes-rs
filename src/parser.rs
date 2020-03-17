@@ -239,6 +239,7 @@ impl<'s, 'b> Parser<'s, 'b> {
                 }
                 State::If => self.process_if_block()?,
                 State::Loop => self.process_loop_block()?,
+                State::Call => self.process_call_block()?,
                 state => break Err(self.make_unexpected_state_err(state)),
             }
         }
@@ -633,6 +634,14 @@ fn parse_select_without_else() {
             Instruction::Goto(19),
             Instruction::EndBlock,
         ],
+    );
+}
+
+#[test]
+fn parse_call_in_if() {
+    parse_test(
+        "만약 호출 더하기 { 1 2 } { 1 } 그외 { 0 } 2",
+        &[Instruction::StartBlock],
     );
 }
 
