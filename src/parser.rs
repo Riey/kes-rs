@@ -19,13 +19,13 @@ enum State {
     Call,
 }
 
-struct Parser<'s, 'b> {
+struct Parser<'b, 's> {
     bump: &'b Bump,
     lexer: Lexer<'s>,
-    ret: Vec<'b, Instruction<'b>>,
+    ret: Vec<'b, Instruction<'s>>,
 }
 
-impl<'s, 'b> Parser<'s, 'b> {
+impl<'b, 's> Parser<'b, 's> {
     fn new(bump: &'b Bump, source: &'s str) -> Self {
         let mut ret = Self {
             bump,
@@ -39,7 +39,7 @@ impl<'s, 'b> Parser<'s, 'b> {
     }
 
     #[inline]
-    fn push(&mut self, instruction: Instruction<'b>) {
+    fn push(&mut self, instruction: Instruction<'s>) {
         self.ret.push(instruction);
     }
 
@@ -56,11 +56,6 @@ impl<'s, 'b> Parser<'s, 'b> {
     #[inline]
     fn expect_next_token(&mut self) -> Result<Token<'s>> {
         self.lexer.next().ok_or(Error::UnexpectedEndOfToken)?
-    }
-
-    #[inline]
-    fn intern(&self, s: &str) -> &'b str {
-        self.bump.alloc_str(s)
     }
 
     fn make_unexpected_token_err(&self, tok: Token) -> Error {
@@ -94,17 +89,17 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
-    fn process_token(&mut self, token: Token) -> Option<State> {
+    fn process_token(&mut self, token: Token<'s>) -> Option<State> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
             Token::Pop => self.push(Instruction::Pop),
             Token::Exit => self.push(Instruction::Exit),
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
-            Token::StrLit(text) => self.push(Instruction::LoadStr(self.intern(text))),
-            Token::Variable(ident) => self.push(Instruction::LoadVar(self.intern(ident))),
-            Token::Builtin(ident) => self.push(Instruction::LoadBuiltin(self.intern(ident))),
-            Token::Assign(ident) => self.push(Instruction::StoreVar(self.intern(ident))),
+            Token::StrLit(text) => self.push(Instruction::LoadStr(text)),
+            Token::Variable(ident) => self.push(Instruction::LoadVar(ident)),
+            Token::Builtin(ident) => self.push(Instruction::LoadBuiltin(ident)),
+            Token::Assign(ident) => self.push(Instruction::StoreVar(ident)),
             Token::Operator(op) => self.push(Instruction::Operator(op)),
             Token::Colon => self.push(Instruction::Print),
             Token::At => self.push(Instruction::PrintLine),
@@ -320,7 +315,7 @@ impl<'s, 'b> Parser<'s, 'b> {
 
         self.expect_next_open_brace()?;
         self.process_block()?;
-        *self.ret.last_mut().unwrap() = Instruction::CallBuiltin(self.intern(func));
+        *self.ret.last_mut().unwrap() = Instruction::CallBuiltin(func);
         Ok(())
     }
 
@@ -345,14 +340,14 @@ impl<'s, 'b> Parser<'s, 'b> {
         }
     }
 
-    fn parse(mut self) -> Result<Vec<'b, Instruction<'b>>> {
+    fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
         self.process()?;
 
         Ok(self.ret)
     }
 }
 
-pub fn parse<'b>(bump: &'b Bump, source: &str) -> Result<Vec<'b, Instruction<'b>>> {
+pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, Instruction<'s>>> {
     Parser::new(bump, source).parse()
 }
 
