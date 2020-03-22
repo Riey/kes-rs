@@ -127,6 +127,8 @@ impl<'s> Lexer<'s> {
             Ok(Some(Token::Call))
         } else if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
+        } else if self.try_strip_prefix("혹은") {
+            Ok(Some(Token::ElseIf))
         } else if self.try_strip_prefix("그외") {
             Ok(Some(Token::Else))
         } else if self.try_strip_prefix("선택") {
@@ -216,6 +218,7 @@ impl<'s> Iterator for Lexer<'s> {
         match self.pop_char()? {
             '\'' => Some(self.read_str().map(Token::StrLit)),
             '$' => Some(Ok(Token::Variable(self.read_ident()))),
+            '_' => Some(Ok(Token::Underscore)),
             '{' => Some(Ok(Token::OpenBrace)),
             '}' => Some(Ok(Token::CloseBrace)),
             '#' => Some(Ok(Token::Sharp)),

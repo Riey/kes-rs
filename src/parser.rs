@@ -9,14 +9,25 @@ use crate::error::{ParserError as Error, ParserResult as Result};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum State {
-    End,
-    OpenBrace,
-    CloseBrace,
     If,
+    ElseIf,
     Else,
     Loop,
     Select,
     Call,
+    Underscore,
+    OpenBrace,
+    CloseBrace,
+}
+
+#[derive(Clone, Copy)]
+enum BlockState {
+    IfBlock(usize),
+    ElseBlock(usize),
+    SelectBlock,
+    SelectArmBlock(usize, usize),
+    SelectElseBlock(usize),
+    CallBlock,
 }
 
 struct Parser<'b, 's> {
@@ -54,19 +65,17 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
+    fn peek_next_token(&self) -> Result<Option<Token<'s>>> {
+        self.lexer.clone().next().transpose()
+    }
+
+    #[inline]
     fn expect_next_token(&mut self) -> Result<Token<'s>> {
         self.lexer.next().ok_or(Error::UnexpectedEndOfToken)?
     }
 
     fn make_unexpected_token_err(&self, tok: Token) -> Error {
         Error::UnexpectedToken(format!("{:?}", tok), self.lexer.line())
-    }
-
-    fn make_unexpected_state_err(&self, state: State) -> Error {
-        match state {
-            State::End => Error::UnexpectedEndOfToken,
-            state => Error::UnexpectedToken(format!("{:?}", state), self.lexer.line()),
-        }
     }
 
     fn expect_next_open_brace(&mut self) -> Result<()> {
@@ -106,6 +115,8 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Sharp => self.push(Instruction::PrintWait),
             Token::If => return Some(State::If),
             Token::Else => return Some(State::Else),
+            Token::ElseIf => return Some(State::ElseIf),
+            Token::Underscore => return Some(State::Underscore),
             Token::OpenBrace => return Some(State::OpenBrace),
             Token::CloseBrace => return Some(State::CloseBrace),
             Token::Loop => return Some(State::Loop),
@@ -116,232 +127,47 @@ impl<'b, 's> Parser<'b, 's> {
         None
     }
 
-    fn step(&mut self) -> Result<State> {
+    fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
+        use std::vec::Vec as StdVec;
+        let mut wait_block_stack = StdVec::with_capacity(100);
+        let mut block_stack = StdVec::with_capacity(100);
+
         while let Some(token) = self.next_token()? {
             match self.process_token(token) {
-                Some(state) => return Ok(state),
+                Some(state) => match state {
+                    State::OpenBrace => {
+                        let wait_block = wait_block_stack.pop().unwrap();
+
+                        match wait_block {
+                            State::If => {
+                                block_stack.push(BlockState::IfBlock(self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::OpenBrace | State::CloseBrace => unsafe {
+                                std::hint::unreachable_unchecked()
+                            },
+                            _ => unimplemented!(),
+                        }
+                    }
+                    State::CloseBrace => {
+                        let block = block_stack.pop().unwrap();
+
+                        match block {
+                            BlockState::IfBlock(top) => {
+                                self.push(Instruction::EndBlock);
+                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                            }
+                            _ => unimplemented!(),
+                        }
+                    }
+                    _ => {
+                        wait_block_stack.push(state);
+                    }
+                },
                 _ => continue,
             }
         }
-        Ok(State::End)
-    }
-
-    fn read_until_open_brace(&mut self) -> Result<()> {
-        loop {
-            match self.step()? {
-                State::OpenBrace => break Ok(()),
-                State::If => self.process_if_block()?,
-                State::Loop => self.process_loop_block()?,
-                State::Select => self.process_select_block()?,
-                State::Call => self.process_call_block()?,
-                state => break Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn process_block(&mut self) -> Result<()> {
-        self.push(Instruction::StartBlock);
-
-        loop {
-            match self.step()? {
-                State::CloseBrace => {
-                    self.push(Instruction::EndBlock);
-                    break Ok(());
-                }
-                State::If => self.process_if_block()?,
-                State::Loop => self.process_loop_block()?,
-                State::Select => self.process_select_block()?,
-                State::Call => self.process_call_block()?,
-                state => return Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn process_if_block_inner(&mut self) -> Result<()> {
-        let if_top = self.next_pos();
-        // goto endif
-        self.push(Instruction::Nop);
-
-        // if block
-        self.push(Instruction::StartBlock);
-
-        loop {
-            match self.step()? {
-                State::CloseBrace => {
-                    let back = self.lexer;
-                    match self.next_token()? {
-                        Some(Token::Else) => {
-                            self.push(Instruction::EndBlock);
-                            let endif = self.next_pos();
-                            self.push(Instruction::Nop);
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-
-                            let start = self.next_pos();
-
-                            loop {
-                                match self.step()? {
-                                    State::OpenBrace => break,
-                                    State::Call => self.process_call_block()?,
-                                    other => return Err(self.make_unexpected_state_err(other)),
-                                }
-                            }
-
-                            let else_if = start != self.next_pos();
-
-                            if else_if {
-                                self.process_if_block_inner()?;
-                            } else {
-                                self.process_block()?;
-                            }
-
-                            self.ret[endif] = Instruction::Goto(self.next_pos());
-                        }
-                        Some(..) => {
-                            self.lexer = back;
-                            self.push(Instruction::EndBlock);
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-                        }
-                        None => {
-                            self.push(Instruction::EndBlock);
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-                        }
-                    }
-
-                    break Ok(());
-                }
-                State::Call => self.process_call_block()?,
-                State::If => self.process_if_block()?,
-
-                State::Loop => self.process_loop_block()?,
-                State::Select => self.process_select_block()?,
-                state => return Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn process_if_block(&mut self) -> Result<()> {
-        self.read_until_open_brace()?;
-        self.process_if_block_inner()
-    }
-
-    fn process_loop_block(&mut self) -> Result<()> {
-        self.push(Instruction::StartBlock);
-
-        let loop_top = self.next_pos();
-        self.read_until_open_brace()?;
-        let loop_jmp = self.next_pos();
-        self.push(Instruction::Nop);
-
-        loop {
-            match self.step()? {
-                State::CloseBrace => {
-                    self.push(Instruction::Goto(loop_top));
-                    self.ret[loop_jmp] = Instruction::GotoIfNot(self.next_pos());
-                    self.push(Instruction::EndBlock);
-                    break Ok(());
-                }
-                State::If => self.process_if_block()?,
-                State::Loop => self.process_loop_block()?,
-                State::Call => self.process_call_block()?,
-                state => break Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn process_select_block(&mut self) -> Result<()> {
-        let mut end_select_buf = Vec::with_capacity_in(50, self.bump);
-        self.push(Instruction::StartBlock);
-        self.read_until_open_brace()?;
-
-        loop {
-            match self.expect_next_token()? {
-                token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
-                    self.push(Instruction::Duplicate);
-                    self.process_token(token);
-                    self.push(Instruction::Operator(Operator::Equal));
-                    let end_arm = self.next_pos();
-                    self.push(Instruction::Nop);
-
-                    loop {
-                        match self.expect_next_token()? {
-                            Token::Operator(Operator::Or) => match self.expect_next_token()? {
-                                token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
-                                    self.push(Instruction::Duplicate);
-                                    self.process_token(token);
-                                    self.push(Instruction::Operator(Operator::Equal));
-                                    self.push(Instruction::Operator(Operator::Or));
-                                }
-                                token => return Err(self.make_unexpected_token_err(token)),
-                            },
-                            Token::OpenBrace => {
-                                self.process_block()?;
-
-                                end_select_buf.push(self.next_pos());
-                                self.push(Instruction::Nop);
-                                break;
-                            }
-                            token => return Err(self.make_unexpected_token_err(token)),
-                        }
-                    }
-
-                    self.ret[end_arm] = Instruction::GotoIfNot(self.next_pos());
-                }
-                Token::CloseBrace => {
-                    break;
-                }
-                Token::Else => {
-                    self.expect_next_open_brace()?;
-                    self.process_block()?;
-                    self.expect_next_close_brace()?;
-                    break;
-                }
-                token => return Err(self.make_unexpected_token_err(token)),
-            }
-        }
-
-        for end_select in end_select_buf {
-            self.ret[end_select] = Instruction::Goto(self.next_pos());
-        }
-
-        self.push(Instruction::EndBlock);
-        Ok(())
-    }
-
-    fn process_call_block(&mut self) -> Result<()> {
-        let func = match self.expect_next_token()? {
-            Token::Builtin(name) => name,
-            other => return Err(self.make_unexpected_token_err(other)),
-        };
-
-        self.expect_next_open_brace()?;
-        self.process_block()?;
-        *self.ret.last_mut().unwrap() = Instruction::CallBuiltin(func);
-        Ok(())
-    }
-
-    fn process(&mut self) -> Result<()> {
-        loop {
-            match self.step()? {
-                State::Call => {
-                    self.process_call_block()?;
-                }
-                State::If => {
-                    self.process_if_block()?;
-                }
-                State::Loop => {
-                    self.process_loop_block()?;
-                }
-                State::Select => {
-                    self.process_select_block()?;
-                }
-                State::End => break Ok(()),
-                state => break Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
-        self.process()?;
 
         Ok(self.ret)
     }
