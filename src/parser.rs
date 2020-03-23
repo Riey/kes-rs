@@ -168,6 +168,7 @@ impl<'b, 's> Parser<'b, 's> {
             }
             other => return Err(self.make_unexpected_token_err(other)),
         }
+        self.push(Instruction::Operator(Operator::Equal));
 
         loop {
             match self.try_strip_not_open_brace() {
@@ -287,20 +288,20 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::Pop);
                             }
                             BlockState::SelectArmBlock(prev_end, top) => {
-                                let pos = self.next_pos();
                                 self.push(Instruction::EndBlock);
-                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                                let pos = self.next_pos();
                                 self.push(Instruction::Nop);
+                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
                                 if prev_end != 0 {
                                     self.ret[prev_end] = Instruction::Goto(pos);
                                 }
                                 self.read_select_arm(pos, &mut wait_block_stack)?;
                             }
                             BlockState::SelectElseBlock(prev_end) => {
+                                self.push(Instruction::EndBlock);
                                 if prev_end != 0 {
                                     self.ret[prev_end] = Instruction::Goto(self.next_pos());
                                 }
-                                self.push(Instruction::EndBlock);
                             }
                         }
                     }
@@ -586,42 +587,41 @@ fn parse_select() {
 ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Add),
             Instruction::Duplicate,
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(14),
+            Instruction::GotoIfNot(13),
             Instruction::StartBlock,
             Instruction::LoadStr("3"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(36),
+            Instruction::Goto(21),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(23),
+            Instruction::GotoIfNot(22),
             Instruction::StartBlock,
             Instruction::LoadStr("2"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(36),
+            Instruction::Goto(30),
             Instruction::Duplicate,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(32),
+            Instruction::GotoIfNot(31),
             Instruction::StartBlock,
             Instruction::LoadStr("1"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(36),
+            Instruction::Goto(35),
             Instruction::StartBlock,
             Instruction::LoadStr("other"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::EndBlock,
+            Instruction::Pop,
             Instruction::LoadStr("foo"),
             Instruction::PrintLine,
         ],
