@@ -15,7 +15,8 @@ enum State<'s> {
     Loop(usize),
     Select,
     Call(&'s str),
-    Underscore,
+    SelectArm(usize),
+    Underscore(usize),
     OpenBrace,
     CloseBrace,
 }
@@ -64,6 +65,24 @@ impl<'b, 's> Parser<'b, 's> {
     #[inline]
     fn next_token(&mut self) -> Result<Option<Token<'s>>> {
         self.lexer.next().transpose()
+    }
+
+    #[inline]
+    fn try_strip_not_open_brace(&mut self) -> Option<Token<'s>> {
+        let mut new_lexer = self.lexer;
+        if let Some(Ok(token)) = new_lexer.next() {
+            match token {
+                Token::OpenBrace => {
+                    return None;
+                }
+                other => {
+                    self.lexer = new_lexer;
+                    return Some(other);
+                }
+            }
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -138,22 +157,68 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Sharp => self.push(Instruction::PrintWait),
             Token::If => return Ok(Some(State::If)),
             Token::Else => return Ok(Some(State::Else)),
-            Token::ElseIf => return Err(self.make_unexpected_token_err(token)),
-            Token::Underscore => return Ok(Some(State::Underscore)),
             Token::OpenBrace => return Ok(Some(State::OpenBrace)),
             Token::CloseBrace => return Ok(Some(State::CloseBrace)),
             Token::Loop => return Ok(Some(State::Loop(self.next_pos()))),
             Token::Select => return Ok(Some(State::Select)),
             Token::Call => return Ok(Some(State::Call(self.expect_next_builtin()?))),
+            Token::ElseIf | Token::Underscore => return Err(self.make_unexpected_token_err(token)),
         }
 
         Ok(None)
     }
 
+    fn read_select_arm(
+        &mut self,
+        prev_end: usize,
+        wait_block_stack: &mut Vec<State<'s>>,
+    ) -> Result<()> {
+        match self.expect_next_token()? {
+            Token::IntLit(num) => {
+                self.push(Instruction::Duplicate);
+                self.push(Instruction::LoadInt(num));
+            }
+            Token::StrLit(text) => {
+                self.push(Instruction::Duplicate);
+                self.push(Instruction::LoadStr(text));
+            }
+            Token::Underscore => {
+                wait_block_stack.push(State::Underscore(prev_end));
+                return Ok(());
+            }
+            other => return Err(self.make_unexpected_token_err(other)),
+        }
+
+        loop {
+            match self.try_strip_not_open_brace() {
+                Some(Token::Operator(Operator::Or)) => {
+                    self.push(Instruction::Duplicate);
+                    match self.expect_next_token()? {
+                        Token::IntLit(num) => {
+                            self.push(Instruction::LoadInt(num));
+                        }
+                        Token::StrLit(text) => {
+                            self.push(Instruction::LoadStr(text));
+                        }
+                        other => return Err(self.make_unexpected_token_err(other)),
+                    }
+                    self.push(Instruction::Operator(Operator::Equal));
+                    self.push(Instruction::Operator(Operator::Or));
+                }
+                Some(other) => {
+                    return Err(self.make_unexpected_token_err(other));
+                }
+                None => break,
+            }
+        }
+
+        wait_block_stack.push(State::SelectArm(prev_end));
+        Ok(())
+    }
+
     fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
         let mut wait_block_stack = Vec::with_capacity_in(10, self.bump);
         let mut block_stack = Vec::with_capacity_in(50, self.bump);
-        // let mut if_else_stack = StdVec::with_capacity(100);
 
         while let Some(token) = self.next_token()? {
             match self.process_token(token)? {
@@ -186,10 +251,23 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::Nop);
                                 self.push(Instruction::StartBlock);
                             }
+                            State::Select => {
+                                block_stack.push(BlockState::SelectBlock);
+                                self.read_select_arm(0, &mut wait_block_stack)?;
+                            }
+                            State::SelectArm(prev_end) => {
+                                block_stack
+                                    .push(BlockState::SelectArmBlock(prev_end, self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::Underscore(prev_end) => {
+                                block_stack.push(BlockState::SelectElseBlock(prev_end));
+                                self.push(Instruction::StartBlock);
+                            }
                             State::OpenBrace | State::CloseBrace => unsafe {
                                 std::hint::unreachable_unchecked();
                             },
-                            _ => unimplemented!(),
                         }
                     }
                     State::CloseBrace => {
@@ -225,7 +303,25 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::Goto(loop_start));
                                 self.ret[cond_end] = Instruction::GotoIfNot(self.next_pos());
                             }
-                            _ => unimplemented!(),
+                            BlockState::SelectBlock => {
+                                self.push(Instruction::Pop);
+                            }
+                            BlockState::SelectArmBlock(prev_end, top) => {
+                                let pos = self.next_pos();
+                                self.push(Instruction::EndBlock);
+                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                                self.push(Instruction::Nop);
+                                if prev_end != 0 {
+                                    self.ret[prev_end] = Instruction::Goto(pos);
+                                }
+                                self.read_select_arm(pos, &mut wait_block_stack)?;
+                            }
+                            BlockState::SelectElseBlock(prev_end) => {
+                                if prev_end != 0 {
+                                    self.ret[prev_end] = Instruction::Goto(self.next_pos());
+                                }
+                                self.push(Instruction::EndBlock);
+                            }
                         }
                     }
                     _ => {
@@ -468,7 +564,7 @@ fn parse_select_else() {
     parse_test(
         "
 선택 1 {
-    그외 {
+    _ {
         ''@
     }
 }
@@ -476,13 +572,12 @@ fn parse_select_else() {
 ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::StartBlock,
             Instruction::LoadStr(""),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::EndBlock,
+            Instruction::Pop,
             Instruction::LoadStr(""),
             Instruction::PrintLine,
         ],
@@ -503,7 +598,7 @@ fn parse_select() {
     1 {
         '1'@
     }
-    그외 {
+    _ {
         'other'@
     }
 }
