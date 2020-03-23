@@ -672,17 +672,17 @@ fn parse_loop_test() {
             Instruction::StartBlock,
             Instruction::LoadInt(0),
             Instruction::StoreVar("0"),
-            Instruction::StartBlock,
             Instruction::LoadVar("0"),
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Less),
-            Instruction::GotoIfNot(13),
+            Instruction::GotoIfNot(14),
+            Instruction::StartBlock,
             Instruction::LoadVar("0"),
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Add),
             Instruction::StoreVar("0"),
-            Instruction::Goto(4),
             Instruction::EndBlock,
+            Instruction::Goto(3),
         ],
     );
 }
@@ -726,9 +726,9 @@ fn parse_nested_block_with_loop() {
     ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(0),
-            Instruction::GotoIfNot(18),
+            Instruction::GotoIfNot(19),
+            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Add),
@@ -742,8 +742,8 @@ fn parse_nested_block_with_loop() {
             Instruction::StartBlock,
             Instruction::LoadStr("5"),
             Instruction::EndBlock,
-            Instruction::Goto(2),
             Instruction::EndBlock,
+            Instruction::Goto(1),
         ],
     );
 }
