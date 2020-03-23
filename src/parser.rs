@@ -16,7 +16,7 @@ enum State<'s> {
     Select,
     Call(&'s str),
     SelectArm(usize),
-    Underscore(usize),
+    SelectElse(usize),
     OpenBrace,
     CloseBrace,
 }
@@ -163,7 +163,7 @@ impl<'b, 's> Parser<'b, 's> {
                 self.push(Instruction::LoadStr(text));
             }
             Token::Underscore => {
-                wait_block_stack.push(State::Underscore(prev_end));
+                wait_block_stack.push(State::SelectElse(prev_end));
                 return Ok(());
             }
             other => return Err(self.make_unexpected_token_err(other)),
@@ -241,7 +241,7 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::Nop);
                                 self.push(Instruction::StartBlock);
                             }
-                            State::Underscore(prev_end) => {
+                            State::SelectElse(prev_end) => {
                                 block_stack.push(BlockState::SelectElseBlock(prev_end));
                                 self.push(Instruction::StartBlock);
                             }
