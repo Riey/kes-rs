@@ -68,6 +68,15 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
+    fn peek_next_is_close_brace(&self) -> bool {
+        let mut lexer = self.lexer;
+        match lexer.next() {
+            Some(Ok(Token::CloseBrace)) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
     fn try_strip_not_open_brace(&mut self) -> Option<Token<'s>> {
         let mut new_lexer = self.lexer;
         if let Some(Ok(token)) = new_lexer.next() {
@@ -234,7 +243,9 @@ impl<'b, 's> Parser<'b, 's> {
                             }
                             State::Select => {
                                 block_stack.push(BlockState::SelectBlock);
-                                self.read_select_arm(0, &mut wait_block_stack)?;
+                                if !self.peek_next_is_close_brace() {
+                                    self.read_select_arm(0, &mut wait_block_stack)?;
+                                }
                             }
                             State::SelectArm(prev_end) => {
                                 block_stack
@@ -295,7 +306,11 @@ impl<'b, 's> Parser<'b, 's> {
                                 if prev_end != 0 {
                                     self.ret[prev_end] = Instruction::Goto(pos);
                                 }
-                                self.read_select_arm(pos, &mut wait_block_stack)?;
+                                if !self.peek_next_is_close_brace() {
+                                    self.read_select_arm(pos, &mut wait_block_stack)?;
+                                } else {
+                                    self.ret.pop();
+                                }
                             }
                             BlockState::SelectElseBlock(prev_end) => {
                                 self.push(Instruction::EndBlock);
@@ -643,25 +658,23 @@ fn parse_select_without_else() {
 ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::Duplicate,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(11),
+            Instruction::GotoIfNot(10),
             Instruction::StartBlock,
             Instruction::LoadInt(2),
             Instruction::EndBlock,
-            Instruction::Goto(19),
+            Instruction::Goto(17),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(19),
+            Instruction::GotoIfNot(18),
             Instruction::StartBlock,
             Instruction::LoadInt(3),
             Instruction::EndBlock,
-            Instruction::Goto(19),
-            Instruction::EndBlock,
+            Instruction::Pop,
         ],
     );
 }
