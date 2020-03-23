@@ -8,27 +8,27 @@ use bumpalo::Bump;
 use crate::error::{ParserError as Error, ParserResult as Result};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum State {
+enum State<'s> {
     If,
     ElseIf(usize),
     Else,
     Loop,
     Select,
-    Call,
+    Call(&'s str),
     Underscore,
     OpenBrace,
     CloseBrace,
 }
 
 #[derive(Clone, Copy)]
-enum BlockState {
+enum BlockState<'s> {
     IfBlock(usize),
     ElseIfBlock(usize, usize),
     ElseBlock(usize),
     SelectBlock,
     SelectArmBlock(usize, usize),
     SelectElseBlock(usize),
-    CallBlock,
+    CallBlock(&'s str),
 }
 
 struct Parser<'b, 's> {
@@ -66,7 +66,7 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn try_strip_token_else_or_else_if(&mut self) -> Option<State> {
+    fn try_strip_token_else_or_else_if(&mut self) -> Option<State<'s>> {
         let mut new_lexer = self.lexer;
         if let Some(Ok(token)) = new_lexer.next() {
             match token {
@@ -113,7 +113,14 @@ impl<'b, 's> Parser<'b, 's> {
         }
     }
 
-    fn process_token(&mut self, token: Token<'s>) -> Result<Option<State>> {
+    fn expect_next_builtin(&mut self) -> Result<&'s str> {
+        match self.expect_next_token()? {
+            Token::Builtin(builtin) => Ok(builtin),
+            other => Err(self.make_unexpected_token_err(other)),
+        }
+    }
+
+    fn process_token(&mut self, token: Token<'s>) -> Result<Option<State<'s>>> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
@@ -136,7 +143,7 @@ impl<'b, 's> Parser<'b, 's> {
             Token::CloseBrace => return Ok(Some(State::CloseBrace)),
             Token::Loop => return Ok(Some(State::Loop)),
             Token::Select => return Ok(Some(State::Select)),
-            Token::Call => return Ok(Some(State::Call)),
+            Token::Call => return Ok(Some(State::Call(self.expect_next_builtin()?))),
         }
 
         Ok(None)
@@ -169,8 +176,12 @@ impl<'b, 's> Parser<'b, 's> {
                                 block_stack.push(BlockState::ElseBlock(self.next_pos() - 1));
                                 self.push(Instruction::StartBlock);
                             }
+                            State::Call(builtin) => {
+                                block_stack.push(BlockState::CallBlock(builtin));
+                                self.push(Instruction::StartBlock);
+                            }
                             State::OpenBrace | State::CloseBrace => unsafe {
-                                std::hint::unreachable_unchecked()
+                                std::hint::unreachable_unchecked();
                             },
                             _ => unimplemented!(),
                         }
@@ -199,6 +210,9 @@ impl<'b, 's> Parser<'b, 's> {
                             BlockState::ElseBlock(end) => {
                                 self.push(Instruction::EndBlock);
                                 self.ret[end] = Instruction::Goto(self.next_pos());
+                            }
+                            BlockState::CallBlock(builtin) => {
+                                self.push(Instruction::CallBuiltin(builtin))
                             }
                             _ => unimplemented!(),
                         }
