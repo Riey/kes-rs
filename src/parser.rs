@@ -113,26 +113,6 @@ impl<'b, 's> Parser<'b, 's> {
         Error::UnexpectedToken(format!("{:?}", tok), self.lexer.line())
     }
 
-    fn expect_next_open_brace(&mut self) -> Result<()> {
-        match self.expect_next_token()? {
-            Token::OpenBrace => Ok(()),
-            token => Err(Error::UnexpectedToken(
-                format!("{:?}가 아니라 {{가 와야합니다", token),
-                self.lexer.line(),
-            )),
-        }
-    }
-
-    fn expect_next_close_brace(&mut self) -> Result<()> {
-        match self.expect_next_token()? {
-            Token::CloseBrace => Ok(()),
-            token => Err(Error::UnexpectedToken(
-                format!("{:?}가 아니라 }}가 와야합니다", token),
-                self.lexer.line(),
-            )),
-        }
-    }
-
     fn expect_next_builtin(&mut self) -> Result<&'s str> {
         match self.expect_next_token()? {
             Token::Builtin(builtin) => Ok(builtin),
