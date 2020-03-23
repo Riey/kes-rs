@@ -151,9 +151,8 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
-        use std::vec::Vec as StdVec;
-        let mut wait_block_stack = StdVec::with_capacity(100);
-        let mut block_stack = StdVec::with_capacity(100);
+        let mut wait_block_stack = Vec::with_capacity_in(10, self.bump);
+        let mut block_stack = Vec::with_capacity_in(50, self.bump);
         // let mut if_else_stack = StdVec::with_capacity(100);
 
         while let Some(token) = self.next_token()? {
