@@ -10,7 +10,7 @@ use crate::error::{ParserError as Error, ParserResult as Result};
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum State {
     If,
-    ElseIf,
+    ElseIf(usize),
     Else,
     Loop,
     Select,
@@ -23,6 +23,7 @@ enum State {
 #[derive(Clone, Copy)]
 enum BlockState {
     IfBlock(usize),
+    ElseIfBlock(usize, usize),
     ElseBlock(usize),
     SelectBlock,
     SelectArmBlock(usize, usize),
@@ -65,8 +66,22 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn peek_next_token(&self) -> Result<Option<Token<'s>>> {
-        self.lexer.clone().next().transpose()
+    fn try_strip_token_else_or_else_if(&mut self) -> Option<State> {
+        let mut new_lexer = self.lexer;
+        if let Some(Ok(token)) = new_lexer.next() {
+            match token {
+                Token::Else => {
+                    self.lexer = new_lexer;
+                    return Some(State::Else);
+                }
+                Token::ElseIf => {
+                    self.lexer = new_lexer;
+                    return Some(State::ElseIf(self.next_pos()));
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     #[inline]
@@ -98,7 +113,7 @@ impl<'b, 's> Parser<'b, 's> {
         }
     }
 
-    fn process_token(&mut self, token: Token<'s>) -> Option<State> {
+    fn process_token(&mut self, token: Token<'s>) -> Result<Option<State>> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
@@ -113,27 +128,28 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Colon => self.push(Instruction::Print),
             Token::At => self.push(Instruction::PrintLine),
             Token::Sharp => self.push(Instruction::PrintWait),
-            Token::If => return Some(State::If),
-            Token::Else => return Some(State::Else),
-            Token::ElseIf => return Some(State::ElseIf),
-            Token::Underscore => return Some(State::Underscore),
-            Token::OpenBrace => return Some(State::OpenBrace),
-            Token::CloseBrace => return Some(State::CloseBrace),
-            Token::Loop => return Some(State::Loop),
-            Token::Select => return Some(State::Select),
-            Token::Call => return Some(State::Call),
+            Token::If => return Ok(Some(State::If)),
+            Token::Else => return Ok(Some(State::Else)),
+            Token::ElseIf => return Err(self.make_unexpected_token_err(token)),
+            Token::Underscore => return Ok(Some(State::Underscore)),
+            Token::OpenBrace => return Ok(Some(State::OpenBrace)),
+            Token::CloseBrace => return Ok(Some(State::CloseBrace)),
+            Token::Loop => return Ok(Some(State::Loop)),
+            Token::Select => return Ok(Some(State::Select)),
+            Token::Call => return Ok(Some(State::Call)),
         }
 
-        None
+        Ok(None)
     }
 
     fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
         use std::vec::Vec as StdVec;
         let mut wait_block_stack = StdVec::with_capacity(100);
         let mut block_stack = StdVec::with_capacity(100);
+        // let mut if_else_stack = StdVec::with_capacity(100);
 
         while let Some(token) = self.next_token()? {
-            match self.process_token(token) {
+            match self.process_token(token)? {
                 Some(state) => match state {
                     State::OpenBrace => {
                         let wait_block = wait_block_stack.pop().unwrap();
@@ -142,6 +158,15 @@ impl<'b, 's> Parser<'b, 's> {
                             State::If => {
                                 block_stack.push(BlockState::IfBlock(self.next_pos()));
                                 self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::ElseIf(prev_if) => {
+                                block_stack.push(BlockState::ElseIfBlock(prev_if, self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::Else => {
+                                block_stack.push(BlockState::ElseBlock(self.next_pos() - 1));
                                 self.push(Instruction::StartBlock);
                             }
                             State::OpenBrace | State::CloseBrace => unsafe {
@@ -156,7 +181,24 @@ impl<'b, 's> Parser<'b, 's> {
                         match block {
                             BlockState::IfBlock(top) => {
                                 self.push(Instruction::EndBlock);
+                                if let Some(state) = self.try_strip_token_else_or_else_if() {
+                                    wait_block_stack.push(state);
+                                    self.push(Instruction::Nop);
+                                }
                                 self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                            }
+                            BlockState::ElseIfBlock(if_end, top) => {
+                                self.push(Instruction::EndBlock);
+                                self.ret[if_end] = Instruction::Goto(self.next_pos());
+                                if let Some(state) = self.try_strip_token_else_or_else_if() {
+                                    wait_block_stack.push(state);
+                                    self.push(Instruction::Nop);
+                                }
+                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                            }
+                            BlockState::ElseBlock(end) => {
+                                self.push(Instruction::EndBlock);
+                                self.ret[end] = Instruction::Goto(self.next_pos());
                             }
                             _ => unimplemented!(),
                         }
@@ -178,6 +220,7 @@ pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, Instruct
 }
 
 #[cfg(test)]
+#[cfg_attr(feature = "unstable", track_caller)]
 fn parse_test(source: &str, instructions: &[Instruction]) {
     use pretty_assertions::assert_eq;
 
@@ -270,14 +313,53 @@ fn parse_if_test() {
 }
 
 #[test]
+fn parse_if_else_if_test() {
+    parse_test(
+        "
+만약 1 2 < {
+    '1은 2보다 작다'@
+} 혹은 2 3 < {
+    '2는 3보다 작다'@
+}
+'3 + 4 = ' 3 4 + @
+",
+        &[
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Less),
+            Instruction::GotoIfNot(10),
+            Instruction::StartBlock,
+            Instruction::LoadStr("1은 2보다 작다"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::Goto(18),
+            Instruction::LoadInt(2),
+            Instruction::LoadInt(3),
+            Instruction::Operator(Operator::Less),
+            Instruction::GotoIfNot(18),
+            Instruction::StartBlock,
+            Instruction::LoadStr("2는 3보다 작다"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::LoadStr("3 + 4 = "),
+            Instruction::LoadInt(3),
+            Instruction::LoadInt(4),
+            Instruction::Operator(Operator::Add),
+            Instruction::PrintLine,
+        ],
+    );
+}
+
+#[test]
 fn parse_if_else_test() {
     parse_test(
         "
 만약 1 2 < {
     '1은 2보다 작다'@
-} 그외 2 2 == {
+} 혹은 2 2 == {
     '2와 2는 같다'@
-} 그외 1 2 > {
+} 혹은 1 2 > {
     '1은 2보다 크다'@
 } 그외 {
     '1은 2와 같다'@
@@ -294,7 +376,7 @@ fn parse_if_else_test() {
             Instruction::LoadStr("1은 2보다 작다"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(32),
+            Instruction::Goto(18),
             Instruction::LoadInt(2),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
@@ -303,7 +385,7 @@ fn parse_if_else_test() {
             Instruction::LoadStr("2와 2는 같다"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(32),
+            Instruction::Goto(27),
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Greater),

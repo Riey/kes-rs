@@ -16,6 +16,7 @@ harness = false
 
 [features]
 logging = ["log"]
+unstable = []
 
 [profile.release]
 debug = true
