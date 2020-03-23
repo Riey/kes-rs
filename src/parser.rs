@@ -12,7 +12,7 @@ enum State<'s> {
     If,
     ElseIf(usize),
     Else,
-    Loop,
+    Loop(usize),
     Select,
     Call(&'s str),
     Underscore,
@@ -25,6 +25,7 @@ enum BlockState<'s> {
     IfBlock(usize),
     ElseIfBlock(usize, usize),
     ElseBlock(usize),
+    LoopBlock(usize, usize),
     SelectBlock,
     SelectArmBlock(usize, usize),
     SelectElseBlock(usize),
@@ -141,7 +142,7 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Underscore => return Ok(Some(State::Underscore)),
             Token::OpenBrace => return Ok(Some(State::OpenBrace)),
             Token::CloseBrace => return Ok(Some(State::CloseBrace)),
-            Token::Loop => return Ok(Some(State::Loop)),
+            Token::Loop => return Ok(Some(State::Loop(self.next_pos()))),
             Token::Select => return Ok(Some(State::Select)),
             Token::Call => return Ok(Some(State::Call(self.expect_next_builtin()?))),
         }
@@ -180,6 +181,12 @@ impl<'b, 's> Parser<'b, 's> {
                                 block_stack.push(BlockState::CallBlock(builtin));
                                 self.push(Instruction::StartBlock);
                             }
+                            State::Loop(loop_start) => {
+                                block_stack
+                                    .push(BlockState::LoopBlock(loop_start, self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
                             State::OpenBrace | State::CloseBrace => unsafe {
                                 std::hint::unreachable_unchecked();
                             },
@@ -213,6 +220,11 @@ impl<'b, 's> Parser<'b, 's> {
                             }
                             BlockState::CallBlock(builtin) => {
                                 self.push(Instruction::CallBuiltin(builtin))
+                            }
+                            BlockState::LoopBlock(loop_start, cond_end) => {
+                                self.push(Instruction::EndBlock);
+                                self.push(Instruction::Goto(loop_start));
+                                self.ret[cond_end] = Instruction::GotoIfNot(self.next_pos());
                             }
                             _ => unimplemented!(),
                         }
@@ -639,14 +651,14 @@ fn parse_call_in_loop() {
         &[
             Instruction::StartBlock,
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::CallBuiltin("더하기"),
-            Instruction::GotoIfNot(9),
+            Instruction::GotoIfNot(10),
+            Instruction::StartBlock,
             Instruction::LoadInt(1),
-            Instruction::Goto(2),
             Instruction::EndBlock,
+            Instruction::Goto(1),
             Instruction::LoadInt(2),
         ],
     );
