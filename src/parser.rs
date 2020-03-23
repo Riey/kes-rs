@@ -606,7 +606,7 @@ fn parse_call_in_if() {
 #[test]
 fn parse_call_in_else_if() {
     parse_test(
-        "만약 1 { 1 } 그외 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
+        "만약 1 { 1 } 혹은 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
         &[
             Instruction::StartBlock,
             Instruction::LoadInt(1),
@@ -614,7 +614,7 @@ fn parse_call_in_else_if() {
             Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::EndBlock,
-            Instruction::Goto(19),
+            Instruction::Goto(15),
             Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
