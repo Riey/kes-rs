@@ -2,8 +2,8 @@ use crate::instruction::Instruction;
 use crate::lexer::Lexer;
 use crate::operator::Operator;
 use crate::token::Token;
-use arrayvec::ArrayVec;
 use arrayvec::Array;
+use arrayvec::ArrayVec;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 
@@ -275,20 +275,24 @@ impl<'b, 's> Parser<'b, 's> {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[top as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
                             }
                             BlockState::ElseIfBlock(if_end, top) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[if_end as usize] = Instruction::Goto(self.next_pos() as usize);
+                                self.ret[if_end as usize] =
+                                    Instruction::Goto(self.next_pos() as usize);
                                 if let Some(state) = self.try_strip_token_else_or_else_if() {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[top as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
                             }
                             BlockState::ElseBlock(end) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[end as usize] = Instruction::Goto(self.next_pos() as usize);
+                                self.ret[end as usize] =
+                                    Instruction::Goto(self.next_pos() as usize);
                             }
                             BlockState::CallBlock(builtin) => {
                                 self.push(Instruction::CallBuiltin(builtin))
@@ -296,7 +300,8 @@ impl<'b, 's> Parser<'b, 's> {
                             BlockState::LoopBlock(loop_start, cond_end) => {
                                 self.push(Instruction::EndBlock);
                                 self.push(Instruction::Goto(loop_start as usize));
-                                self.ret[cond_end as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[cond_end as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
                             }
                             BlockState::SelectBlock => {
                                 self.push(Instruction::Pop);
@@ -305,7 +310,8 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::EndBlock);
                                 let pos = self.next_pos();
                                 self.push(Instruction::Nop);
-                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[top as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
                                 if prev_end != 0 {
                                     self.ret[prev_end as usize] = Instruction::Goto(pos as usize);
                                 }
@@ -318,7 +324,8 @@ impl<'b, 's> Parser<'b, 's> {
                             BlockState::SelectElseBlock(prev_end) => {
                                 self.push(Instruction::EndBlock);
                                 if prev_end != 0 {
-                                    self.ret[prev_end as usize] = Instruction::Goto(self.next_pos() as usize);
+                                    self.ret[prev_end as usize] =
+                                        Instruction::Goto(self.next_pos() as usize);
                                 }
                             }
                         }
