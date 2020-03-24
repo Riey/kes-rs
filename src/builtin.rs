@@ -32,7 +32,7 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
     }
     #[inline]
     async fn wait(&mut self) {
-        (**self).wait();
+        (**self).wait().await;
     }
 }
 
