@@ -127,6 +127,8 @@ impl<'s> Lexer<'s> {
             Ok(Some(Token::Call))
         } else if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
+        } else if self.try_strip_prefix("혹은") {
+            Ok(Some(Token::ElseIf))
         } else if self.try_strip_prefix("그외") {
             Ok(Some(Token::Else))
         } else if self.try_strip_prefix("선택") {
@@ -208,6 +210,8 @@ impl<'s> Iterator for Lexer<'s> {
                 return Some(ident.parse().map(Token::IntLit).map_err(|_| {
                     self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")
                 }));
+            } else if let [b'_'] = ident.as_bytes() {
+                return Some(Ok(Token::Underscore));
             } else {
                 return Some(Ok(Token::Builtin(ident)));
             }
@@ -243,7 +247,9 @@ fn lex_test() {
     assert_eq!(ts.next().unwrap().unwrap(), Token::Assign("123"),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("'ABC' @");
+    ts = Lexer::new("_ A 'ABC' @");
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Underscore,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Builtin("A"),);
     assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
     assert_eq!(ts.next().unwrap().unwrap(), Token::At,);
     assert!(ts.text.is_empty());

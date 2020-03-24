@@ -32,32 +32,14 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
     }
     #[inline]
     async fn wait(&mut self) {
-        (**self).wait();
+        (**self).wait().await;
     }
 }
 
-pub struct DummyBuiltin;
-
-#[async_trait(?Send)]
-impl Builtin for DummyBuiltin {
-    #[inline]
-    async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
-        None
-    }
-    #[inline]
-    fn load<'b>(&mut self, _name: &str, _b: &'b Bump) -> Value<'b> {
-        Value::Int(0)
-    }
-    #[inline]
-    fn print(&mut self, _v: Value) {}
-    #[inline]
-    fn new_line(&mut self) {}
-    #[inline]
-    async fn wait(&mut self) {}
-}
-
+#[cfg(test)]
 pub struct RecordBuiltin(String);
 
+#[cfg(test)]
 impl RecordBuiltin {
     #[inline]
     pub fn new() -> Self {
@@ -70,6 +52,7 @@ impl RecordBuiltin {
     }
 }
 
+#[cfg(test)]
 #[async_trait(?Send)]
 impl Builtin for RecordBuiltin {
     #[inline]

@@ -2,25 +2,40 @@ use crate::instruction::Instruction;
 use crate::lexer::Lexer;
 use crate::operator::Operator;
 use crate::token::Token;
+use arrayvec::Array;
+use arrayvec::ArrayVec;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 
 use crate::error::{ParserError as Error, ParserResult as Result};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum State {
-    End,
+enum State<'s> {
+    If,
+    ElseIf(u32),
+    Else,
+    Loop(u32),
+    Select,
+    Call(&'s str),
+    SelectArm(u32),
+    SelectElse(u32),
     OpenBrace,
     CloseBrace,
-    If,
-    Else,
-    Loop,
-    Select,
-    Call,
+}
+
+#[derive(Clone, Copy)]
+enum BlockState<'s> {
+    IfBlock(u32),
+    ElseIfBlock(u32, u32),
+    ElseBlock(u32),
+    LoopBlock(u32, u32),
+    SelectBlock,
+    SelectArmBlock(u32, u32),
+    SelectElseBlock(u32),
+    CallBlock(&'s str),
 }
 
 struct Parser<'b, 's> {
-    bump: &'b Bump,
     lexer: Lexer<'s>,
     ret: Vec<'b, Instruction<'s>>,
 }
@@ -28,9 +43,8 @@ struct Parser<'b, 's> {
 impl<'b, 's> Parser<'b, 's> {
     fn new(bump: &'b Bump, source: &'s str) -> Self {
         let mut ret = Self {
-            bump,
             lexer: Lexer::new(source),
-            ret: Vec::with_capacity_in(1000, bump),
+            ret: Vec::with_capacity_in(3000, bump),
         };
 
         ret.push(Instruction::StartBlock);
@@ -44,13 +58,59 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn next_pos(&self) -> usize {
-        self.ret.len()
+    fn next_pos(&self) -> u32 {
+        self.ret.len() as u32
     }
 
     #[inline]
     fn next_token(&mut self) -> Result<Option<Token<'s>>> {
         self.lexer.next().transpose()
+    }
+
+    #[inline]
+    fn peek_next_is_close_brace(&self) -> bool {
+        let mut lexer = self.lexer;
+        match lexer.next() {
+            Some(Ok(Token::CloseBrace)) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    fn try_strip_not_open_brace(&mut self) -> Option<Token<'s>> {
+        let mut new_lexer = self.lexer;
+        if let Some(Ok(token)) = new_lexer.next() {
+            match token {
+                Token::OpenBrace => {
+                    return None;
+                }
+                other => {
+                    self.lexer = new_lexer;
+                    return Some(other);
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn try_strip_token_else_or_else_if(&mut self) -> Option<State<'s>> {
+        let mut new_lexer = self.lexer;
+        if let Some(Ok(token)) = new_lexer.next() {
+            match token {
+                Token::Else => {
+                    self.lexer = new_lexer;
+                    return Some(State::Else);
+                }
+                Token::ElseIf => {
+                    self.lexer = new_lexer;
+                    return Some(State::ElseIf(self.next_pos()));
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     #[inline]
@@ -62,34 +122,16 @@ impl<'b, 's> Parser<'b, 's> {
         Error::UnexpectedToken(format!("{:?}", tok), self.lexer.line())
     }
 
-    fn make_unexpected_state_err(&self, state: State) -> Error {
-        match state {
-            State::End => Error::UnexpectedEndOfToken,
-            state => Error::UnexpectedToken(format!("{:?}", state), self.lexer.line()),
-        }
-    }
-
-    fn expect_next_open_brace(&mut self) -> Result<()> {
+    #[inline]
+    fn expect_next_builtin(&mut self) -> Result<&'s str> {
         match self.expect_next_token()? {
-            Token::OpenBrace => Ok(()),
-            token => Err(Error::UnexpectedToken(
-                format!("{:?}가 아니라 {{가 와야합니다", token),
-                self.lexer.line(),
-            )),
+            Token::Builtin(builtin) => Ok(builtin),
+            other => Err(self.make_unexpected_token_err(other)),
         }
     }
 
-    fn expect_next_close_brace(&mut self) -> Result<()> {
-        match self.expect_next_token()? {
-            Token::CloseBrace => Ok(()),
-            token => Err(Error::UnexpectedToken(
-                format!("{:?}가 아니라 }}가 와야합니다", token),
-                self.lexer.line(),
-            )),
-        }
-    }
-
-    fn process_token(&mut self, token: Token<'s>) -> Option<State> {
+    #[inline]
+    fn process_token(&mut self, token: Token<'s>) -> Result<Option<State<'s>>> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
@@ -104,244 +146,197 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Colon => self.push(Instruction::Print),
             Token::At => self.push(Instruction::PrintLine),
             Token::Sharp => self.push(Instruction::PrintWait),
-            Token::If => return Some(State::If),
-            Token::Else => return Some(State::Else),
-            Token::OpenBrace => return Some(State::OpenBrace),
-            Token::CloseBrace => return Some(State::CloseBrace),
-            Token::Loop => return Some(State::Loop),
-            Token::Select => return Some(State::Select),
-            Token::Call => return Some(State::Call),
+            Token::If => return Ok(Some(State::If)),
+            Token::Else => return Ok(Some(State::Else)),
+            Token::OpenBrace => return Ok(Some(State::OpenBrace)),
+            Token::CloseBrace => return Ok(Some(State::CloseBrace)),
+            Token::Loop => return Ok(Some(State::Loop(self.next_pos()))),
+            Token::Select => return Ok(Some(State::Select)),
+            Token::Call => return Ok(Some(State::Call(self.expect_next_builtin()?))),
+            Token::ElseIf | Token::Underscore => return Err(self.make_unexpected_token_err(token)),
         }
 
-        None
+        Ok(None)
     }
 
-    fn step(&mut self) -> Result<State> {
-        while let Some(token) = self.next_token()? {
-            match self.process_token(token) {
-                Some(state) => return Ok(state),
-                _ => continue,
+    #[inline]
+    fn read_select_arm<A: Array<Item = State<'s>>>(
+        &mut self,
+        prev_end: u32,
+        wait_block_stack: &mut ArrayVec<A>,
+    ) -> Result<()> {
+        match self.expect_next_token()? {
+            Token::IntLit(num) => {
+                self.push(Instruction::Duplicate);
+                self.push(Instruction::LoadInt(num));
             }
-        }
-        Ok(State::End)
-    }
-
-    fn read_until_open_brace(&mut self) -> Result<()> {
-        loop {
-            match self.step()? {
-                State::OpenBrace => break Ok(()),
-                State::If => self.process_if_block()?,
-                State::Loop => self.process_loop_block()?,
-                State::Select => self.process_select_block()?,
-                State::Call => self.process_call_block()?,
-                state => break Err(self.make_unexpected_state_err(state)),
+            Token::StrLit(text) => {
+                self.push(Instruction::Duplicate);
+                self.push(Instruction::LoadStr(text));
             }
-        }
-    }
-
-    fn process_block(&mut self) -> Result<()> {
-        self.push(Instruction::StartBlock);
-
-        loop {
-            match self.step()? {
-                State::CloseBrace => {
-                    self.push(Instruction::EndBlock);
-                    break Ok(());
-                }
-                State::If => self.process_if_block()?,
-                State::Loop => self.process_loop_block()?,
-                State::Select => self.process_select_block()?,
-                State::Call => self.process_call_block()?,
-                state => return Err(self.make_unexpected_state_err(state)),
+            Token::Underscore => {
+                wait_block_stack.push(State::SelectElse(prev_end));
+                return Ok(());
             }
-        }
-    }
-
-    fn process_if_block_inner(&mut self) -> Result<()> {
-        let if_top = self.next_pos();
-        // goto endif
-        self.push(Instruction::Nop);
-
-        // if block
-        self.push(Instruction::StartBlock);
-
-        loop {
-            match self.step()? {
-                State::CloseBrace => {
-                    let back = self.lexer;
-                    match self.next_token()? {
-                        Some(Token::Else) => {
-                            self.push(Instruction::EndBlock);
-                            let endif = self.next_pos();
-                            self.push(Instruction::Nop);
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-
-                            let start = self.next_pos();
-
-                            loop {
-                                match self.step()? {
-                                    State::OpenBrace => break,
-                                    State::Call => self.process_call_block()?,
-                                    other => return Err(self.make_unexpected_state_err(other)),
-                                }
-                            }
-
-                            let else_if = start != self.next_pos();
-
-                            if else_if {
-                                self.process_if_block_inner()?;
-                            } else {
-                                self.process_block()?;
-                            }
-
-                            self.ret[endif] = Instruction::Goto(self.next_pos());
-                        }
-                        Some(..) => {
-                            self.lexer = back;
-                            self.push(Instruction::EndBlock);
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-                        }
-                        None => {
-                            self.push(Instruction::EndBlock);
-                            self.ret[if_top] = Instruction::GotoIfNot(self.next_pos());
-                        }
-                    }
-
-                    break Ok(());
-                }
-                State::Call => self.process_call_block()?,
-                State::If => self.process_if_block()?,
-
-                State::Loop => self.process_loop_block()?,
-                State::Select => self.process_select_block()?,
-                state => return Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn process_if_block(&mut self) -> Result<()> {
-        self.read_until_open_brace()?;
-        self.process_if_block_inner()
-    }
-
-    fn process_loop_block(&mut self) -> Result<()> {
-        self.push(Instruction::StartBlock);
-
-        let loop_top = self.next_pos();
-        self.read_until_open_brace()?;
-        let loop_jmp = self.next_pos();
-        self.push(Instruction::Nop);
-
-        loop {
-            match self.step()? {
-                State::CloseBrace => {
-                    self.push(Instruction::Goto(loop_top));
-                    self.ret[loop_jmp] = Instruction::GotoIfNot(self.next_pos());
-                    self.push(Instruction::EndBlock);
-                    break Ok(());
-                }
-                State::If => self.process_if_block()?,
-                State::Loop => self.process_loop_block()?,
-                State::Call => self.process_call_block()?,
-                state => break Err(self.make_unexpected_state_err(state)),
-            }
-        }
-    }
-
-    fn process_select_block(&mut self) -> Result<()> {
-        let mut end_select_buf = Vec::with_capacity_in(50, self.bump);
-        self.push(Instruction::StartBlock);
-        self.read_until_open_brace()?;
-
-        loop {
-            match self.expect_next_token()? {
-                token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
-                    self.push(Instruction::Duplicate);
-                    self.process_token(token);
-                    self.push(Instruction::Operator(Operator::Equal));
-                    let end_arm = self.next_pos();
-                    self.push(Instruction::Nop);
-
-                    loop {
-                        match self.expect_next_token()? {
-                            Token::Operator(Operator::Or) => match self.expect_next_token()? {
-                                token @ Token::IntLit(..) | token @ Token::StrLit(..) => {
-                                    self.push(Instruction::Duplicate);
-                                    self.process_token(token);
-                                    self.push(Instruction::Operator(Operator::Equal));
-                                    self.push(Instruction::Operator(Operator::Or));
-                                }
-                                token => return Err(self.make_unexpected_token_err(token)),
-                            },
-                            Token::OpenBrace => {
-                                self.process_block()?;
-
-                                end_select_buf.push(self.next_pos());
-                                self.push(Instruction::Nop);
-                                break;
-                            }
-                            token => return Err(self.make_unexpected_token_err(token)),
-                        }
-                    }
-
-                    self.ret[end_arm] = Instruction::GotoIfNot(self.next_pos());
-                }
-                Token::CloseBrace => {
-                    break;
-                }
-                Token::Else => {
-                    self.expect_next_open_brace()?;
-                    self.process_block()?;
-                    self.expect_next_close_brace()?;
-                    break;
-                }
-                token => return Err(self.make_unexpected_token_err(token)),
-            }
-        }
-
-        for end_select in end_select_buf {
-            self.ret[end_select] = Instruction::Goto(self.next_pos());
-        }
-
-        self.push(Instruction::EndBlock);
-        Ok(())
-    }
-
-    fn process_call_block(&mut self) -> Result<()> {
-        let func = match self.expect_next_token()? {
-            Token::Builtin(name) => name,
             other => return Err(self.make_unexpected_token_err(other)),
-        };
+        }
+        self.push(Instruction::Operator(Operator::Equal));
 
-        self.expect_next_open_brace()?;
-        self.process_block()?;
-        *self.ret.last_mut().unwrap() = Instruction::CallBuiltin(func);
-        Ok(())
-    }
-
-    fn process(&mut self) -> Result<()> {
         loop {
-            match self.step()? {
-                State::Call => {
-                    self.process_call_block()?;
+            match self.try_strip_not_open_brace() {
+                Some(Token::Operator(Operator::Or)) => {
+                    self.push(Instruction::Duplicate);
+                    match self.expect_next_token()? {
+                        Token::IntLit(num) => {
+                            self.push(Instruction::LoadInt(num));
+                        }
+                        Token::StrLit(text) => {
+                            self.push(Instruction::LoadStr(text));
+                        }
+                        other => return Err(self.make_unexpected_token_err(other)),
+                    }
+                    self.push(Instruction::Operator(Operator::Equal));
+                    self.push(Instruction::Operator(Operator::Or));
                 }
-                State::If => {
-                    self.process_if_block()?;
+                Some(other) => {
+                    return Err(self.make_unexpected_token_err(other));
                 }
-                State::Loop => {
-                    self.process_loop_block()?;
-                }
-                State::Select => {
-                    self.process_select_block()?;
-                }
-                State::End => break Ok(()),
-                state => break Err(self.make_unexpected_state_err(state)),
+                None => break,
             }
         }
+
+        wait_block_stack.push(State::SelectArm(prev_end));
+        Ok(())
     }
 
     fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
-        self.process()?;
+        let mut wait_block_stack: ArrayVec<[_; 50]> = ArrayVec::new();
+        let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
+
+        while let Some(token) = self.next_token()? {
+            match self.process_token(token)? {
+                Some(state) => match state {
+                    State::OpenBrace => {
+                        let wait_block = wait_block_stack.pop().unwrap();
+
+                        match wait_block {
+                            State::If => {
+                                block_stack.push(BlockState::IfBlock(self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::ElseIf(prev_if) => {
+                                block_stack.push(BlockState::ElseIfBlock(prev_if, self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::Else => {
+                                block_stack.push(BlockState::ElseBlock(self.next_pos() - 1));
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::Call(builtin) => {
+                                block_stack.push(BlockState::CallBlock(builtin));
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::Loop(loop_start) => {
+                                block_stack
+                                    .push(BlockState::LoopBlock(loop_start, self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::Select => {
+                                block_stack.push(BlockState::SelectBlock);
+                                if !self.peek_next_is_close_brace() {
+                                    self.read_select_arm(0, &mut wait_block_stack)?;
+                                }
+                            }
+                            State::SelectArm(prev_end) => {
+                                block_stack
+                                    .push(BlockState::SelectArmBlock(prev_end, self.next_pos()));
+                                self.push(Instruction::Nop);
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::SelectElse(prev_end) => {
+                                block_stack.push(BlockState::SelectElseBlock(prev_end));
+                                self.push(Instruction::StartBlock);
+                            }
+                            State::OpenBrace | State::CloseBrace => unsafe {
+                                std::hint::unreachable_unchecked();
+                            },
+                        }
+                    }
+                    State::CloseBrace => {
+                        let block = block_stack.pop().unwrap();
+
+                        match block {
+                            BlockState::IfBlock(top) => {
+                                self.push(Instruction::EndBlock);
+                                if let Some(state) = self.try_strip_token_else_or_else_if() {
+                                    wait_block_stack.push(state);
+                                    self.push(Instruction::Nop);
+                                }
+                                self.ret[top as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                            }
+                            BlockState::ElseIfBlock(if_end, top) => {
+                                self.push(Instruction::EndBlock);
+                                self.ret[if_end as usize] =
+                                    Instruction::Goto(self.next_pos() as usize);
+                                if let Some(state) = self.try_strip_token_else_or_else_if() {
+                                    wait_block_stack.push(state);
+                                    self.push(Instruction::Nop);
+                                }
+                                self.ret[top as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                            }
+                            BlockState::ElseBlock(end) => {
+                                self.push(Instruction::EndBlock);
+                                self.ret[end as usize] =
+                                    Instruction::Goto(self.next_pos() as usize);
+                            }
+                            BlockState::CallBlock(builtin) => {
+                                self.push(Instruction::CallBuiltin(builtin))
+                            }
+                            BlockState::LoopBlock(loop_start, cond_end) => {
+                                self.push(Instruction::EndBlock);
+                                self.push(Instruction::Goto(loop_start as usize));
+                                self.ret[cond_end as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                            }
+                            BlockState::SelectBlock => {
+                                self.push(Instruction::Pop);
+                            }
+                            BlockState::SelectArmBlock(prev_end, top) => {
+                                self.push(Instruction::EndBlock);
+                                let pos = self.next_pos();
+                                self.push(Instruction::Nop);
+                                self.ret[top as usize] =
+                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                                if prev_end != 0 {
+                                    self.ret[prev_end as usize] = Instruction::Goto(pos as usize);
+                                }
+                                if !self.peek_next_is_close_brace() {
+                                    self.read_select_arm(pos, &mut wait_block_stack)?;
+                                } else {
+                                    self.ret.pop();
+                                }
+                            }
+                            BlockState::SelectElseBlock(prev_end) => {
+                                self.push(Instruction::EndBlock);
+                                if prev_end != 0 {
+                                    self.ret[prev_end as usize] =
+                                        Instruction::Goto(self.next_pos() as usize);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        wait_block_stack.push(state);
+                    }
+                },
+                _ => continue,
+            }
+        }
 
         Ok(self.ret)
     }
@@ -352,6 +347,7 @@ pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, Instruct
 }
 
 #[cfg(test)]
+#[cfg_attr(feature = "unstable", track_caller)]
 fn parse_test(source: &str, instructions: &[Instruction]) {
     use pretty_assertions::assert_eq;
 
@@ -444,14 +440,53 @@ fn parse_if_test() {
 }
 
 #[test]
+fn parse_if_else_if_test() {
+    parse_test(
+        "
+만약 1 2 < {
+    '1은 2보다 작다'@
+} 혹은 2 3 < {
+    '2는 3보다 작다'@
+}
+'3 + 4 = ' 3 4 + @
+",
+        &[
+            Instruction::StartBlock,
+            Instruction::LoadInt(1),
+            Instruction::LoadInt(2),
+            Instruction::Operator(Operator::Less),
+            Instruction::GotoIfNot(10),
+            Instruction::StartBlock,
+            Instruction::LoadStr("1은 2보다 작다"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::Goto(18),
+            Instruction::LoadInt(2),
+            Instruction::LoadInt(3),
+            Instruction::Operator(Operator::Less),
+            Instruction::GotoIfNot(18),
+            Instruction::StartBlock,
+            Instruction::LoadStr("2는 3보다 작다"),
+            Instruction::PrintLine,
+            Instruction::EndBlock,
+            Instruction::LoadStr("3 + 4 = "),
+            Instruction::LoadInt(3),
+            Instruction::LoadInt(4),
+            Instruction::Operator(Operator::Add),
+            Instruction::PrintLine,
+        ],
+    );
+}
+
+#[test]
 fn parse_if_else_test() {
     parse_test(
         "
 만약 1 2 < {
     '1은 2보다 작다'@
-} 그외 2 2 == {
+} 혹은 2 2 == {
     '2와 2는 같다'@
-} 그외 1 2 > {
+} 혹은 1 2 > {
     '1은 2보다 크다'@
 } 그외 {
     '1은 2와 같다'@
@@ -468,7 +503,7 @@ fn parse_if_else_test() {
             Instruction::LoadStr("1은 2보다 작다"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(32),
+            Instruction::Goto(18),
             Instruction::LoadInt(2),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
@@ -477,7 +512,7 @@ fn parse_if_else_test() {
             Instruction::LoadStr("2와 2는 같다"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(32),
+            Instruction::Goto(27),
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Greater),
@@ -535,7 +570,7 @@ fn parse_select_else() {
     parse_test(
         "
 선택 1 {
-    그외 {
+    _ {
         ''@
     }
 }
@@ -543,13 +578,12 @@ fn parse_select_else() {
 ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::StartBlock,
             Instruction::LoadStr(""),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::EndBlock,
+            Instruction::Pop,
             Instruction::LoadStr(""),
             Instruction::PrintLine,
         ],
@@ -570,7 +604,7 @@ fn parse_select() {
     1 {
         '1'@
     }
-    그외 {
+    _ {
         'other'@
     }
 }
@@ -578,42 +612,41 @@ fn parse_select() {
 ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Add),
             Instruction::Duplicate,
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(14),
+            Instruction::GotoIfNot(13),
             Instruction::StartBlock,
             Instruction::LoadStr("3"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(36),
+            Instruction::Goto(21),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(23),
+            Instruction::GotoIfNot(22),
             Instruction::StartBlock,
             Instruction::LoadStr("2"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(36),
+            Instruction::Goto(30),
             Instruction::Duplicate,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(32),
+            Instruction::GotoIfNot(31),
             Instruction::StartBlock,
             Instruction::LoadStr("1"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::Goto(36),
+            Instruction::Goto(35),
             Instruction::StartBlock,
             Instruction::LoadStr("other"),
             Instruction::PrintLine,
             Instruction::EndBlock,
-            Instruction::EndBlock,
+            Instruction::Pop,
             Instruction::LoadStr("foo"),
             Instruction::PrintLine,
         ],
@@ -635,25 +668,23 @@ fn parse_select_without_else() {
 ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::Duplicate,
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(11),
+            Instruction::GotoIfNot(10),
             Instruction::StartBlock,
             Instruction::LoadInt(2),
             Instruction::EndBlock,
-            Instruction::Goto(19),
+            Instruction::Goto(17),
             Instruction::Duplicate,
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Equal),
-            Instruction::GotoIfNot(19),
+            Instruction::GotoIfNot(18),
             Instruction::StartBlock,
             Instruction::LoadInt(3),
             Instruction::EndBlock,
-            Instruction::Goto(19),
-            Instruction::EndBlock,
+            Instruction::Pop,
         ],
     );
 }
@@ -684,7 +715,7 @@ fn parse_call_in_if() {
 #[test]
 fn parse_call_in_else_if() {
     parse_test(
-        "만약 1 { 1 } 그외 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
+        "만약 1 { 1 } 혹은 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
         &[
             Instruction::StartBlock,
             Instruction::LoadInt(1),
@@ -692,7 +723,7 @@ fn parse_call_in_else_if() {
             Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::EndBlock,
-            Instruction::Goto(19),
+            Instruction::Goto(15),
             Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
@@ -717,14 +748,14 @@ fn parse_call_in_loop() {
         &[
             Instruction::StartBlock,
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::CallBuiltin("더하기"),
-            Instruction::GotoIfNot(9),
+            Instruction::GotoIfNot(10),
+            Instruction::StartBlock,
             Instruction::LoadInt(1),
-            Instruction::Goto(2),
             Instruction::EndBlock,
+            Instruction::Goto(1),
             Instruction::LoadInt(2),
         ],
     );
@@ -738,17 +769,17 @@ fn parse_loop_test() {
             Instruction::StartBlock,
             Instruction::LoadInt(0),
             Instruction::StoreVar("0"),
-            Instruction::StartBlock,
             Instruction::LoadVar("0"),
             Instruction::LoadInt(3),
             Instruction::Operator(Operator::Less),
-            Instruction::GotoIfNot(13),
+            Instruction::GotoIfNot(14),
+            Instruction::StartBlock,
             Instruction::LoadVar("0"),
             Instruction::LoadInt(1),
             Instruction::Operator(Operator::Add),
             Instruction::StoreVar("0"),
-            Instruction::Goto(4),
             Instruction::EndBlock,
+            Instruction::Goto(3),
         ],
     );
 }
@@ -792,9 +823,9 @@ fn parse_nested_block_with_loop() {
     ",
         &[
             Instruction::StartBlock,
-            Instruction::StartBlock,
             Instruction::LoadInt(0),
-            Instruction::GotoIfNot(18),
+            Instruction::GotoIfNot(19),
+            Instruction::StartBlock,
             Instruction::LoadInt(1),
             Instruction::LoadInt(2),
             Instruction::Operator(Operator::Add),
@@ -808,8 +839,8 @@ fn parse_nested_block_with_loop() {
             Instruction::StartBlock,
             Instruction::LoadStr("5"),
             Instruction::EndBlock,
-            Instruction::Goto(2),
             Instruction::EndBlock,
+            Instruction::Goto(1),
         ],
     );
 }

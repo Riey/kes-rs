@@ -4,6 +4,8 @@ use crate::operator::Operator;
 pub enum Token<'s> {
     /// 만약
     If,
+    /// 혹은
+    ElseIf,
     /// 그외
     Else,
     /// 선택
@@ -42,4 +44,6 @@ pub enum Token<'s> {
     Pop,
     /// \[?]
     Conditional,
+    /// _
+    Underscore,
 }

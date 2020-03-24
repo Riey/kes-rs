@@ -7,21 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'kes-rs'",
+            "name": "Cargo test",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--lib",
-                    "--package=kes-rs"
-                ],
-                "filter": {
-                    "name": "kes-rs",
-                    "kind": "lib"
-                }
+                    "--lib"
+                ]
             },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "program": "${cargo:program}",
+            "args": []
         }
     ]
 }
