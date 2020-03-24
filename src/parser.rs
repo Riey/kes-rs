@@ -2,6 +2,8 @@ use crate::instruction::Instruction;
 use crate::lexer::Lexer;
 use crate::operator::Operator;
 use crate::token::Token;
+use arrayvec::ArrayVec;
+use arrayvec::Array;
 use bumpalo::collections::Vec;
 use bumpalo::Bump;
 
@@ -34,7 +36,6 @@ enum BlockState<'s> {
 }
 
 struct Parser<'b, 's> {
-    bump: &'b Bump,
     lexer: Lexer<'s>,
     ret: Vec<'b, Instruction<'s>>,
 }
@@ -42,9 +43,8 @@ struct Parser<'b, 's> {
 impl<'b, 's> Parser<'b, 's> {
     fn new(bump: &'b Bump, source: &'s str) -> Self {
         let mut ret = Self {
-            bump,
             lexer: Lexer::new(source),
-            ret: Vec::with_capacity_in(1000, bump),
+            ret: Vec::with_capacity_in(3000, bump),
         };
 
         ret.push(Instruction::StartBlock);
@@ -122,6 +122,7 @@ impl<'b, 's> Parser<'b, 's> {
         Error::UnexpectedToken(format!("{:?}", tok), self.lexer.line())
     }
 
+    #[inline]
     fn expect_next_builtin(&mut self) -> Result<&'s str> {
         match self.expect_next_token()? {
             Token::Builtin(builtin) => Ok(builtin),
@@ -129,6 +130,7 @@ impl<'b, 's> Parser<'b, 's> {
         }
     }
 
+    #[inline]
     fn process_token(&mut self, token: Token<'s>) -> Result<Option<State<'s>>> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
@@ -157,10 +159,11 @@ impl<'b, 's> Parser<'b, 's> {
         Ok(None)
     }
 
-    fn read_select_arm(
+    #[inline]
+    fn read_select_arm<A: Array<Item = State<'s>>>(
         &mut self,
         prev_end: usize,
-        wait_block_stack: &mut Vec<State<'s>>,
+        wait_block_stack: &mut ArrayVec<A>,
     ) -> Result<()> {
         match self.expect_next_token()? {
             Token::IntLit(num) => {
@@ -207,8 +210,8 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
-        let mut wait_block_stack = Vec::with_capacity_in(10, self.bump);
-        let mut block_stack = Vec::with_capacity_in(50, self.bump);
+        let mut wait_block_stack: ArrayVec<[_; 50]> = ArrayVec::new();
+        let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
 
         while let Some(token) = self.next_token()? {
             match self.process_token(token)? {
