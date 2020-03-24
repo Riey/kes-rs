@@ -12,26 +12,26 @@ use crate::error::{ParserError as Error, ParserResult as Result};
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum State<'s> {
     If,
-    ElseIf(usize),
+    ElseIf(u32),
     Else,
-    Loop(usize),
+    Loop(u32),
     Select,
     Call(&'s str),
-    SelectArm(usize),
-    SelectElse(usize),
+    SelectArm(u32),
+    SelectElse(u32),
     OpenBrace,
     CloseBrace,
 }
 
 #[derive(Clone, Copy)]
 enum BlockState<'s> {
-    IfBlock(usize),
-    ElseIfBlock(usize, usize),
-    ElseBlock(usize),
-    LoopBlock(usize, usize),
+    IfBlock(u32),
+    ElseIfBlock(u32, u32),
+    ElseBlock(u32),
+    LoopBlock(u32, u32),
     SelectBlock,
-    SelectArmBlock(usize, usize),
-    SelectElseBlock(usize),
+    SelectArmBlock(u32, u32),
+    SelectElseBlock(u32),
     CallBlock(&'s str),
 }
 
@@ -58,8 +58,8 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn next_pos(&self) -> usize {
-        self.ret.len()
+    fn next_pos(&self) -> u32 {
+        self.ret.len() as u32
     }
 
     #[inline]
@@ -162,7 +162,7 @@ impl<'b, 's> Parser<'b, 's> {
     #[inline]
     fn read_select_arm<A: Array<Item = State<'s>>>(
         &mut self,
-        prev_end: usize,
+        prev_end: u32,
         wait_block_stack: &mut ArrayVec<A>,
     ) -> Result<()> {
         match self.expect_next_token()? {
@@ -275,28 +275,28 @@ impl<'b, 's> Parser<'b, 's> {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
                             }
                             BlockState::ElseIfBlock(if_end, top) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[if_end] = Instruction::Goto(self.next_pos());
+                                self.ret[if_end as usize] = Instruction::Goto(self.next_pos() as usize);
                                 if let Some(state) = self.try_strip_token_else_or_else_if() {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
                             }
                             BlockState::ElseBlock(end) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[end] = Instruction::Goto(self.next_pos());
+                                self.ret[end as usize] = Instruction::Goto(self.next_pos() as usize);
                             }
                             BlockState::CallBlock(builtin) => {
                                 self.push(Instruction::CallBuiltin(builtin))
                             }
                             BlockState::LoopBlock(loop_start, cond_end) => {
                                 self.push(Instruction::EndBlock);
-                                self.push(Instruction::Goto(loop_start));
-                                self.ret[cond_end] = Instruction::GotoIfNot(self.next_pos());
+                                self.push(Instruction::Goto(loop_start as usize));
+                                self.ret[cond_end as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
                             }
                             BlockState::SelectBlock => {
                                 self.push(Instruction::Pop);
@@ -305,9 +305,9 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::EndBlock);
                                 let pos = self.next_pos();
                                 self.push(Instruction::Nop);
-                                self.ret[top] = Instruction::GotoIfNot(self.next_pos());
+                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos() as usize);
                                 if prev_end != 0 {
-                                    self.ret[prev_end] = Instruction::Goto(pos);
+                                    self.ret[prev_end as usize] = Instruction::Goto(pos as usize);
                                 }
                                 if !self.peek_next_is_close_brace() {
                                     self.read_select_arm(pos, &mut wait_block_stack)?;
@@ -318,7 +318,7 @@ impl<'b, 's> Parser<'b, 's> {
                             BlockState::SelectElseBlock(prev_end) => {
                                 self.push(Instruction::EndBlock);
                                 if prev_end != 0 {
-                                    self.ret[prev_end] = Instruction::Goto(self.next_pos());
+                                    self.ret[prev_end as usize] = Instruction::Goto(self.next_pos() as usize);
                                 }
                             }
                         }
