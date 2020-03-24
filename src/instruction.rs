@@ -17,8 +17,8 @@ pub enum Instruction<'s> {
     PrintLine,
     PrintWait,
     Operator(Operator),
-    Goto(usize),
-    GotoIfNot(usize),
+    Goto(u32),
+    GotoIfNot(u32),
     StartBlock,
     EndBlock,
 }

@@ -275,33 +275,29 @@ impl<'b, 's> Parser<'b, 's> {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top as usize] =
-                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos());
                             }
                             BlockState::ElseIfBlock(if_end, top) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[if_end as usize] =
-                                    Instruction::Goto(self.next_pos() as usize);
+                                self.ret[if_end as usize] = Instruction::Goto(self.next_pos());
                                 if let Some(state) = self.try_strip_token_else_or_else_if() {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top as usize] =
-                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos());
                             }
                             BlockState::ElseBlock(end) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[end as usize] =
-                                    Instruction::Goto(self.next_pos() as usize);
+                                self.ret[end as usize] = Instruction::Goto(self.next_pos());
                             }
                             BlockState::CallBlock(builtin) => {
                                 self.push(Instruction::CallBuiltin(builtin))
                             }
                             BlockState::LoopBlock(loop_start, cond_end) => {
                                 self.push(Instruction::EndBlock);
-                                self.push(Instruction::Goto(loop_start as usize));
+                                self.push(Instruction::Goto(loop_start));
                                 self.ret[cond_end as usize] =
-                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                                    Instruction::GotoIfNot(self.next_pos());
                             }
                             BlockState::SelectBlock => {
                                 self.push(Instruction::Pop);
@@ -310,10 +306,9 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::EndBlock);
                                 let pos = self.next_pos();
                                 self.push(Instruction::Nop);
-                                self.ret[top as usize] =
-                                    Instruction::GotoIfNot(self.next_pos() as usize);
+                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos());
                                 if prev_end != 0 {
-                                    self.ret[prev_end as usize] = Instruction::Goto(pos as usize);
+                                    self.ret[prev_end as usize] = Instruction::Goto(pos);
                                 }
                                 if !self.peek_next_is_close_brace() {
                                     self.read_select_arm(pos, &mut wait_block_stack)?;
@@ -325,7 +320,7 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::EndBlock);
                                 if prev_end != 0 {
                                     self.ret[prev_end as usize] =
-                                        Instruction::Goto(self.next_pos() as usize);
+                                        Instruction::Goto(self.next_pos());
                                 }
                             }
                         }

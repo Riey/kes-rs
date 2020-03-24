@@ -216,12 +216,12 @@ impl<'c> Context<'c> {
             }
             Instruction::Operator(op) => self.run_operator(op),
             Instruction::Goto(pos) => {
-                self.cursor = pos;
+                self.cursor = pos as usize;
                 return;
             }
             Instruction::GotoIfNot(pos) => {
                 if !self.pop().unwrap().into_bool() {
-                    self.cursor = pos;
+                    self.cursor = pos as usize;
                     return;
                 }
             }
