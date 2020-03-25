@@ -1,6 +1,6 @@
 [package]
 name = "kes"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Riey <creeper844@gmail.com>"]
 edition = "2018"
 description = "Korean Era Script"
@@ -23,7 +23,7 @@ debug = true
 
 [dependencies]
 memchr = "2.3.2"
-bumpalo = { version = "3.2.0", features = ["collections"] }
+bumpalo = { version = "3.2.1", features = ["collections"] }
 ahash = "0.3.2"
 thiserror = "1.0.11"
 async-trait = "0.1.24"
