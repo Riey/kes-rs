@@ -10,13 +10,12 @@ use bumpalo::Bump;
 use crate::error::{ParserError as Error, ParserResult as Result};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum State<'s> {
+enum State {
     If,
     ElseIf(u32),
     Else,
     Loop(u32),
     Select,
-    Call(&'s str),
     SelectArm(u32),
     SelectElse(u32),
     OpenBrace,
@@ -24,7 +23,7 @@ enum State<'s> {
 }
 
 #[derive(Clone, Copy)]
-enum BlockState<'s> {
+enum BlockState {
     IfBlock(u32),
     ElseIfBlock(u32, u32),
     ElseBlock(u32),
@@ -32,7 +31,6 @@ enum BlockState<'s> {
     SelectBlock,
     SelectArmBlock(u32, u32),
     SelectElseBlock(u32),
-    CallBlock(&'s str),
 }
 
 struct Parser<'b, 's> {
@@ -95,7 +93,7 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn try_strip_token_else_or_else_if(&mut self) -> Option<State<'s>> {
+    fn try_strip_token_else_or_else_if(&mut self) -> Option<State> {
         let mut new_lexer = self.lexer;
         if let Some(Ok(token)) = new_lexer.next() {
             match token {
@@ -123,15 +121,11 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn expect_next_builtin(&mut self) -> Result<&'s str> {
-        match self.expect_next_token()? {
-            Token::Builtin(builtin) => Ok(builtin),
-            other => Err(self.make_unexpected_token_err(other)),
-        }
-    }
-
-    #[inline]
-    fn process_token(&mut self, token: Token<'s>) -> Result<Option<State<'s>>> {
+    fn process_token<A: Array<Item = &'s str>>(
+        &mut self,
+        token: Token<'s>,
+        call_stack: &mut ArrayVec<A>,
+    ) -> Result<Option<State>> {
         match token {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
@@ -150,9 +144,31 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Else => return Ok(Some(State::Else)),
             Token::OpenBrace => return Ok(Some(State::OpenBrace)),
             Token::CloseBrace => return Ok(Some(State::CloseBrace)),
+            Token::OpenParan => match self.ret.pop() {
+                Some(Instruction::LoadBuiltin(ident)) => {
+                    call_stack.push(ident);
+                    self.push(Instruction::StartBlock);
+                }
+                _ => {
+                    return Err(Error::CompileError(
+                        format!("호출 할수없는 값입니다"),
+                        self.lexer.line(),
+                    ));
+                }
+            },
+            Token::CloseParan => match call_stack.pop() {
+                Some(ident) => {
+                    self.push(Instruction::CallBuiltin(ident));
+                }
+                None => {
+                    return Err(Error::CompileError(
+                        format!("소괄호의 짝이 맞지 않습니다"),
+                        self.lexer.line(),
+                    ))
+                }
+            },
             Token::Loop => return Ok(Some(State::Loop(self.next_pos()))),
             Token::Select => return Ok(Some(State::Select)),
-            Token::Call => return Ok(Some(State::Call(self.expect_next_builtin()?))),
             Token::ElseIf | Token::Underscore => return Err(self.make_unexpected_token_err(token)),
         }
 
@@ -160,7 +176,7 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn read_select_arm<A: Array<Item = State<'s>>>(
+    fn read_select_arm<A: Array<Item = State>>(
         &mut self,
         prev_end: u32,
         wait_block_stack: &mut ArrayVec<A>,
@@ -212,9 +228,10 @@ impl<'b, 's> Parser<'b, 's> {
     fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
         let mut wait_block_stack: ArrayVec<[_; 50]> = ArrayVec::new();
         let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
+        let mut call_stack: ArrayVec<[_; 20]> = ArrayVec::new();
 
         while let Some(token) = self.next_token()? {
-            match self.process_token(token)? {
+            match self.process_token(token, &mut call_stack)? {
                 Some(state) => match state {
                     State::OpenBrace => {
                         let wait_block = wait_block_stack.pop().unwrap();
@@ -232,10 +249,6 @@ impl<'b, 's> Parser<'b, 's> {
                             }
                             State::Else => {
                                 block_stack.push(BlockState::ElseBlock(self.next_pos() - 1));
-                                self.push(Instruction::StartBlock);
-                            }
-                            State::Call(builtin) => {
-                                block_stack.push(BlockState::CallBlock(builtin));
                                 self.push(Instruction::StartBlock);
                             }
                             State::Loop(loop_start) => {
@@ -289,9 +302,6 @@ impl<'b, 's> Parser<'b, 's> {
                             BlockState::ElseBlock(end) => {
                                 self.push(Instruction::EndBlock);
                                 self.ret[end as usize] = Instruction::Goto(self.next_pos());
-                            }
-                            BlockState::CallBlock(builtin) => {
-                                self.push(Instruction::CallBuiltin(builtin))
                             }
                             BlockState::LoopBlock(loop_start, cond_end) => {
                                 self.push(Instruction::EndBlock);
@@ -687,7 +697,7 @@ fn parse_select_without_else() {
 #[test]
 fn parse_call_in_if() {
     parse_test(
-        "만약 호출 더하기 { 1 2 } { 1 } 그외 { 0 } 2",
+        "만약 더하기(1 2) { 1 } 그외 { 0 } 2",
         &[
             Instruction::StartBlock,
             Instruction::StartBlock,
@@ -710,7 +720,7 @@ fn parse_call_in_if() {
 #[test]
 fn parse_call_in_else_if() {
     parse_test(
-        "만약 1 { 1 } 혹은 호출 더하기 { 1 2 } { 2 } 그외 { 3 } 4",
+        "만약 1 { 1 } 혹은 더하기(1 2) { 2 } 그외 { 3 } 4",
         &[
             Instruction::StartBlock,
             Instruction::LoadInt(1),
@@ -739,7 +749,7 @@ fn parse_call_in_else_if() {
 #[test]
 fn parse_call_in_loop() {
     parse_test(
-        "반복 호출 더하기 { 1 2 } { 1 } 2",
+        "반복 더하기(1 2) { 1 } 2",
         &[
             Instruction::StartBlock,
             Instruction::StartBlock,
@@ -783,10 +793,7 @@ fn parse_loop_test() {
 fn parse_call() {
     parse_test(
         "
-호출 더하기 {
-    1 2 +
-    4
-}
+더하기(1 2 + 4)
 5 +
 ",
         &[

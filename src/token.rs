@@ -10,8 +10,6 @@ pub enum Token<'s> {
     Else,
     /// 선택
     Select,
-    /// 호출
-    Call,
     /// 종료
     Exit,
     /// 반복
@@ -30,6 +28,10 @@ pub enum Token<'s> {
     OpenBrace,
     /// }
     CloseBrace,
+    /// (
+    OpenParan,
+    /// )
+    CloseParan,
     /// :
     Colon,
     /// #

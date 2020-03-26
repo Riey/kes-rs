@@ -123,9 +123,7 @@ impl<'s> Lexer<'s> {
     }
 
     fn try_read_keyword(&mut self) -> Result<Option<Token<'s>>> {
-        if self.try_strip_prefix("호출") {
-            Ok(Some(Token::Call))
-        } else if self.try_strip_prefix("만약") {
+        if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
         } else if self.try_strip_prefix("혹은") {
             Ok(Some(Token::ElseIf))
@@ -222,6 +220,8 @@ impl<'s> Iterator for Lexer<'s> {
             '$' => Some(Ok(Token::Variable(self.read_ident()))),
             '{' => Some(Ok(Token::OpenBrace)),
             '}' => Some(Ok(Token::CloseBrace)),
+            '(' => Some(Ok(Token::OpenParan)),
+            ')' => Some(Ok(Token::CloseParan)),
             '#' => Some(Ok(Token::Sharp)),
             '@' => Some(Ok(Token::At)),
             ':' => Some(Ok(Token::Colon)),
