@@ -10,10 +10,6 @@ homepage = "https://github.com/Riey/kes-rs"
 repository = "https://github.com/Riey/kes-rs"
 readme = "README.md"
 
-[[bench]]
-name = "parse"
-harness = false
-
 [features]
 logging = ["log"]
 unstable = []
@@ -32,5 +28,4 @@ arrayvec = "0.5.1"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
-criterion = "0.3.1"
 futures = "0.3.4"
