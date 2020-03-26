@@ -61,8 +61,8 @@ impl<'b, 's> Parser<'b, 's> {
     }
 
     #[inline]
-    fn next_token(&mut self) -> Result<Option<Token<'s>>> {
-        self.lexer.next().transpose()
+    fn next_token(&mut self) -> Option<Result<Token<'s>>> {
+        self.lexer.next()
     }
 
     #[inline]
@@ -230,8 +230,8 @@ impl<'b, 's> Parser<'b, 's> {
         let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
         let mut call_stack: ArrayVec<[_; 20]> = ArrayVec::new();
 
-        while let Some(token) = self.next_token()? {
-            match self.process_token(token, &mut call_stack)? {
+        while let Some(token) = self.next_token() {
+            match self.process_token(token?, &mut call_stack)? {
                 Some(state) => match state {
                     State::OpenBrace => {
                         let wait_block = wait_block_stack.pop().unwrap();
