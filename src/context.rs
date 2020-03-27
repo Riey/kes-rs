@@ -3,6 +3,7 @@ use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::value::Value;
 use ahash::AHashMap;
+use arrayvec::ArrayVec;
 use bumpalo::collections::{String, Vec};
 use bumpalo::Bump;
 use std::convert::{TryFrom, TryInto};
@@ -251,10 +252,16 @@ impl<'c> Context<'c> {
             Instruction::Pop => {
                 self.pop();
             }
-            Instruction::PopExternal => {
-                let val = self.current_block().pop().expect("pop external");
+            Instruction::PopExternal(num) => {
+                let start = if num == 0 {
+                    0
+                } else {
+                    self.current_block().len() - num as usize
+                };
+
+                let buf: ArrayVec<[_; 20]> = self.current_block().drain(start..).collect();
                 let pos = self.stack.len() - 2;
-                self.stack[pos].push(val);
+                self.stack[pos].extend(buf);
             }
             Instruction::Conditional => {
                 let rhs = self.pop().unwrap();
@@ -300,12 +307,12 @@ fn pop_external_test() {
     try_test(
         "
 만약 1 1 == {
-    2 [!]
-    3 4 #
+    2 3 [!]
+    4 5 [!1] #
 }
 @
 ",
-        "34@#2@",
+        "4@#235@",
     );
 }
 

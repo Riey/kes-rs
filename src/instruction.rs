@@ -5,7 +5,7 @@ pub enum Instruction<'s> {
     Nop,
     Exit,
     Pop,
-    PopExternal,
+    PopExternal(u32),
     Duplicate,
     Conditional,
     LoadInt(u32),

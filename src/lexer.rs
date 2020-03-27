@@ -135,8 +135,18 @@ impl<'s> Lexer<'s> {
             Ok(Some(Token::Pop))
         } else if self.try_strip_prefix("[+]") {
             Ok(Some(Token::Duplicate))
-        } else if self.try_strip_prefix("[!]") {
-            Ok(Some(Token::PopExternal))
+        } else if self.try_strip_prefix("[!") {
+            let pos = memchr::memchr(b']', self.text.as_bytes())
+                .ok_or(self.make_code_err("Assign bracket is not paired"))?;
+            let num = unsafe { self.text.get_unchecked(..pos) };
+            self.text = unsafe { self.text.get_unchecked(pos + 1..) };
+            if num.is_empty() {
+                Ok(Some(Token::PopExternal(0)))
+            } else {
+                num.parse()
+                    .map_err(|_| self.make_code_err("[!]안에는 숫자가 와야합니다"))
+                    .map(|num| Some(Token::PopExternal(num)))
+            }
         } else if self.try_strip_prefix("[$") {
             let pos = memchr::memchr(b']', self.text.as_bytes())
                 .ok_or(self.make_code_err("Assign bracket is not paired"))?;

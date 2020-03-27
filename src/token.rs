@@ -47,7 +47,7 @@ pub enum Token<'s> {
     /// \[?]
     Conditional,
     /// \[!]
-    PopExternal,
+    PopExternal(u32),
     /// _
     Underscore,
 }
