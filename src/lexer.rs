@@ -95,17 +95,15 @@ impl<'s> Lexer<'s> {
     }
 
     #[inline]
-    fn try_match_pop_char(&mut self, match_ch: char) -> bool {
-        let ch = match self.text.chars().next() {
-            Some(ch) => ch,
-            None => return false,
-        };
-        if ch == match_ch {
-            self.text = unsafe { self.text.get_unchecked(ch.len_utf8()..) };
-            true
-        } else {
-            false
+    unsafe fn try_match_pop_byte(&mut self, match_byte: u8) -> bool {
+        if let Some(byte) = self.text.as_bytes().get(0) {
+            if *byte == match_byte {
+                self.text = self.text.get_unchecked(1..);
+                return true;
+            }
         }
+
+        false
     }
 
     fn read_str(&mut self) -> Result<&'s str> {
@@ -157,38 +155,40 @@ impl<'s> Lexer<'s> {
     }
 
     fn try_read_operator(&mut self) -> Option<Operator> {
-        if self.try_match_pop_char('+') {
-            Some(Operator::Add)
-        } else if self.try_match_pop_char('-') {
-            Some(Operator::Sub)
-        } else if self.try_match_pop_char('*') {
-            Some(Operator::Mul)
-        } else if self.try_match_pop_char('/') {
-            Some(Operator::Div)
-        } else if self.try_match_pop_char('%') {
-            Some(Operator::Rem)
-        } else if self.try_match_pop_char('&') {
-            Some(Operator::And)
-        } else if self.try_match_pop_char('|') {
-            Some(Operator::Or)
-        } else if self.try_match_pop_char('^') {
-            Some(Operator::Xor)
-        } else if self.try_strip_prefix("<=") {
-            Some(Operator::LessOrEqual)
-        } else if self.try_strip_prefix(">=") {
-            Some(Operator::GreaterOrEqual)
-        } else if self.try_strip_prefix("==") {
-            Some(Operator::Equal)
-        } else if self.try_strip_prefix("<>") {
-            Some(Operator::NotEqual)
-        } else if self.try_match_pop_char('>') {
-            Some(Operator::Greater)
-        } else if self.try_match_pop_char('<') {
-            Some(Operator::Less)
-        } else if self.try_match_pop_char('~') {
-            Some(Operator::Not)
-        } else {
-            None
+        unsafe {
+            if self.try_match_pop_byte(b'+') {
+                Some(Operator::Add)
+            } else if self.try_match_pop_byte(b'-') {
+                Some(Operator::Sub)
+            } else if self.try_match_pop_byte(b'*') {
+                Some(Operator::Mul)
+            } else if self.try_match_pop_byte(b'/') {
+                Some(Operator::Div)
+            } else if self.try_match_pop_byte(b'%') {
+                Some(Operator::Rem)
+            } else if self.try_match_pop_byte(b'&') {
+                Some(Operator::And)
+            } else if self.try_match_pop_byte(b'|') {
+                Some(Operator::Or)
+            } else if self.try_match_pop_byte(b'^') {
+                Some(Operator::Xor)
+            } else if self.try_strip_prefix("<=") {
+                Some(Operator::LessOrEqual)
+            } else if self.try_strip_prefix(">=") {
+                Some(Operator::GreaterOrEqual)
+            } else if self.try_strip_prefix("==") {
+                Some(Operator::Equal)
+            } else if self.try_strip_prefix("<>") {
+                Some(Operator::NotEqual)
+            } else if self.try_match_pop_byte(b'>') {
+                Some(Operator::Greater)
+            } else if self.try_match_pop_byte(b'<') {
+                Some(Operator::Less)
+            } else if self.try_match_pop_byte(b'~') {
+                Some(Operator::Not)
+            } else {
+                None
+            }
         }
     }
 }
