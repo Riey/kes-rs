@@ -88,22 +88,14 @@ impl<'s> Lexer<'s> {
     }
 
     #[inline]
-    fn pop_char(&mut self) -> Option<char> {
-        let ch = self.text.chars().next()?;
-        self.text = unsafe { self.text.get_unchecked(ch.len_utf8()..) };
-        Some(ch)
-    }
-
-    #[inline]
     unsafe fn try_match_pop_byte(&mut self, match_byte: u8) -> bool {
-        if let Some(byte) = self.text.as_bytes().get(0) {
-            if *byte == match_byte {
+        match self.text.as_bytes().get(0) {
+            Some(b) if *b == match_byte => {
                 self.text = self.text.get_unchecked(1..);
-                return true;
+                true
             }
+            _ => false,
         }
-
-        false
     }
 
     fn read_str(&mut self) -> Result<&'s str> {
@@ -191,6 +183,52 @@ impl<'s> Lexer<'s> {
             }
         }
     }
+
+    fn read_next(&mut self) -> Result<Token<'s>> {
+        if let Ok(Some(token)) = self.try_read_keyword() {
+            return Ok(token);
+        }
+
+        if let Some(op) = self.try_read_operator() {
+            return Ok(Token::Operator(op));
+        }
+
+        if let Some(ident) = self.try_read_ident() {
+            if let b'0'..=b'9' = ident.as_bytes()[0] {
+                return ident.parse().map(Token::IntLit).map_err(|_| {
+                    self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")
+                });
+            } else if let [b'_'] = ident.as_bytes() {
+                return Ok(Token::Underscore);
+            } else {
+                return Ok(Token::Builtin(ident));
+            }
+        }
+
+        unsafe {
+            if self.try_match_pop_byte(b'\'') {
+                self.read_str().map(Token::StrLit)
+            } else if self.try_match_pop_byte(b'$') {
+                Ok(Token::Variable(self.read_ident()))
+            } else if self.try_match_pop_byte(b'{') {
+                Ok(Token::OpenBrace)
+            } else if self.try_match_pop_byte(b'}') {
+                Ok(Token::CloseBrace)
+            } else if self.try_match_pop_byte(b'(') {
+                Ok(Token::OpenParan)
+            } else if self.try_match_pop_byte(b')') {
+                Ok(Token::CloseParan)
+            } else if self.try_match_pop_byte(b'#') {
+                Ok(Token::Sharp)
+            } else if self.try_match_pop_byte(b'@') {
+                Ok(Token::At)
+            } else if self.try_match_pop_byte(b':') {
+                Ok(Token::Colon)
+            } else {
+                Err(self.make_char_err(self.text.chars().next().unwrap()))
+            }
+        }
+    }
 }
 
 impl<'s> Iterator for Lexer<'s> {
@@ -199,37 +237,10 @@ impl<'s> Iterator for Lexer<'s> {
     fn next(&mut self) -> Option<Result<Token<'s>>> {
         self.skip_ws();
 
-        if let Ok(Some(token)) = self.try_read_keyword() {
-            return Some(Ok(token));
-        }
-
-        if let Some(op) = self.try_read_operator() {
-            return Some(Ok(Token::Operator(op)));
-        }
-
-        if let Some(ident) = self.try_read_ident() {
-            if let b'0'..=b'9' = ident.as_bytes()[0] {
-                return Some(ident.parse().map(Token::IntLit).map_err(|_| {
-                    self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")
-                }));
-            } else if let [b'_'] = ident.as_bytes() {
-                return Some(Ok(Token::Underscore));
-            } else {
-                return Some(Ok(Token::Builtin(ident)));
-            }
-        }
-
-        match self.pop_char()? {
-            '\'' => Some(self.read_str().map(Token::StrLit)),
-            '$' => Some(Ok(Token::Variable(self.read_ident()))),
-            '{' => Some(Ok(Token::OpenBrace)),
-            '}' => Some(Ok(Token::CloseBrace)),
-            '(' => Some(Ok(Token::OpenParan)),
-            ')' => Some(Ok(Token::CloseParan)),
-            '#' => Some(Ok(Token::Sharp)),
-            '@' => Some(Ok(Token::At)),
-            ':' => Some(Ok(Token::Colon)),
-            ch => Some(Err(self.make_char_err(ch))),
+        if self.text.is_empty() {
+            None
+        } else {
+            Some(self.read_next())
         }
     }
 }
