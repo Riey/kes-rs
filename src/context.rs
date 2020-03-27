@@ -251,6 +251,11 @@ impl<'c> Context<'c> {
             Instruction::Pop => {
                 self.pop();
             }
+            Instruction::PopExternal => {
+                let val = self.current_block().pop().expect("pop external");
+                let pos = self.stack.len() - 2;
+                self.stack[pos].push(val);
+            }
             Instruction::Conditional => {
                 let rhs = self.pop().unwrap();
                 let lhs = self.pop().unwrap();
@@ -288,6 +293,20 @@ fn try_test(code: &str, expected: &str) {
     futures::executor::block_on(ctx.run(&mut builtin));
 
     assert_eq!(builtin.text(), expected);
+}
+
+#[test]
+fn pop_external_test() {
+    try_test(
+        "
+만약 1 1 == {
+    2 [!]
+    3 4 #
+}
+@
+",
+        "34@#2@",
+    );
 }
 
 #[test]

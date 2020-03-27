@@ -135,6 +135,8 @@ impl<'s> Lexer<'s> {
             Ok(Some(Token::Pop))
         } else if self.try_strip_prefix("[+]") {
             Ok(Some(Token::Duplicate))
+        } else if self.try_strip_prefix("[!]") {
+            Ok(Some(Token::PopExternal))
         } else if self.try_strip_prefix("[$") {
             let pos = memchr::memchr(b']', self.text.as_bytes())
                 .ok_or(self.make_code_err("Assign bracket is not paired"))?;

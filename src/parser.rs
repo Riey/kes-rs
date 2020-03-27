@@ -130,6 +130,7 @@ impl<'b, 's> Parser<'b, 's> {
             Token::Conditional => self.push(Instruction::Conditional),
             Token::Duplicate => self.push(Instruction::Duplicate),
             Token::Pop => self.push(Instruction::Pop),
+            Token::PopExternal => self.push(Instruction::PopExternal),
             Token::Exit => self.push(Instruction::Exit),
             Token::IntLit(num) => self.push(Instruction::LoadInt(num)),
             Token::StrLit(text) => self.push(Instruction::LoadStr(text)),
