@@ -31,25 +31,29 @@ impl<'s> Lexer<'s> {
     }
 
     fn skip_ws(&mut self) {
-        loop {
-            const WS: &[char] = &[' ', '\t', '\r'];
-            self.text = self.text.trim_start_matches(WS);
-            match self.text.as_bytes().get(0) {
-                Some(b'\n') => {
-                    self.text = unsafe { self.text.get_unchecked(1..) };
+        let mut bytes = self.text.as_bytes().iter();
+        while let Some(b) = bytes.next() {
+            match b {
+                b' ' | b'\t' | b'\r' => {}
+                b'\n' => {
                     self.line += 1;
                 }
-                Some(b';') => {
-                    let pos =
-                        memchr::memchr(b'\n', self.text.as_bytes()).unwrap_or(self.text.len());
-                    unsafe {
-                        self.text = self.text.get_unchecked(pos..);
-                    }
-                    self.line += 1;
+                b';' => {
+                    let slice = bytes.as_slice();
+                    let pos = memchr::memchr(b'\n', slice).unwrap_or(slice.len());
+                    bytes = unsafe { slice.get_unchecked(pos..) }.iter();
                 }
-                _ => break,
+                _ => {
+                    self.text = unsafe {
+                        self.text
+                            .get_unchecked(self.text.len() - bytes.as_slice().len() - 1..)
+                    };
+                    return;
+                }
             }
         }
+
+        self.text = "";
     }
 
     #[inline]
@@ -240,7 +244,6 @@ fn lex_test() {
     assert!(ts.text.is_empty());
 
     ts = Lexer::new("[?][-][+][$123]");
-
     assert_eq!(ts.next().unwrap().unwrap(), Token::Conditional,);
     assert_eq!(ts.next().unwrap().unwrap(), Token::Pop,);
     assert_eq!(ts.next().unwrap().unwrap(), Token::Duplicate,);
@@ -248,6 +251,13 @@ fn lex_test() {
     assert!(ts.text.is_empty());
 
     ts = Lexer::new("_ A 'ABC' @");
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Underscore,);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::Builtin("A"),);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
+    assert_eq!(ts.next().unwrap().unwrap(), Token::At,);
+    assert!(ts.text.is_empty());
+
+    ts = Lexer::new(";foo\n_ A 'ABC' @");
     assert_eq!(ts.next().unwrap().unwrap(), Token::Underscore,);
     assert_eq!(ts.next().unwrap().unwrap(), Token::Builtin("A"),);
     assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
