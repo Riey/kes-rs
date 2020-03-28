@@ -17,9 +17,9 @@ pub enum Operator {
     /// ^
     Xor,
 
-    /// ==
+    /// =
     Equal,
-    /// <>
+    /// ~=
     NotEqual,
     /// <
     Less,

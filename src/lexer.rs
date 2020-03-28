@@ -176,20 +176,26 @@ impl<'s> Lexer<'s> {
                 Some(Operator::Or)
             } else if self.try_match_pop_byte(b'^') {
                 Some(Operator::Xor)
-            } else if self.try_strip_prefix("<=") {
-                Some(Operator::LessOrEqual)
-            } else if self.try_strip_prefix(">=") {
-                Some(Operator::GreaterOrEqual)
-            } else if self.try_strip_prefix("==") {
+            } else if self.try_match_pop_byte(b'=') {
                 Some(Operator::Equal)
-            } else if self.try_strip_prefix("<>") {
-                Some(Operator::NotEqual)
             } else if self.try_match_pop_byte(b'>') {
-                Some(Operator::Greater)
+                if self.try_match_pop_byte(b'=') {
+                    Some(Operator::GreaterOrEqual)
+                } else {
+                    Some(Operator::Greater)
+                }
             } else if self.try_match_pop_byte(b'<') {
-                Some(Operator::Less)
+                if self.try_match_pop_byte(b'=') {
+                    Some(Operator::LessOrEqual)
+                } else {
+                    Some(Operator::Less)
+                }
             } else if self.try_match_pop_byte(b'~') {
-                Some(Operator::Not)
+                if self.try_match_pop_byte(b'=') {
+                    Some(Operator::NotEqual)
+                } else {
+                    Some(Operator::Not)
+                }
             } else {
                 None
             }
