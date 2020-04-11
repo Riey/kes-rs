@@ -2,14 +2,14 @@ use async_trait::async_trait;
 use crate::value::Value;
 
 #[async_trait(?Send)]
-pub trait KesConsole {
+pub trait Console {
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
     async fn wait(&mut self);
 }
 
 #[async_trait(?Send)]
-impl<'a, C: KesConsole> KesConsole for &'a mut C {
+impl<'a, C: Console> Console for &'a mut C {
     #[inline]
     fn print(&mut self, v: Value) {
         (**self).print(v);
@@ -36,7 +36,7 @@ impl RecordConsole {
 
 #[cfg(test)]
 #[async_trait(?Send)]
-impl KesConsole for RecordConsole {
+impl Console for RecordConsole {
     fn print(&mut self, v: Value) {
         self.0 += &v.to_string();
     }

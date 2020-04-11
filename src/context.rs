@@ -1,5 +1,5 @@
 use crate::builtin::Builtin;
-use crate::console::KesConsole;
+use crate::console::Console;
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::value::Value;
@@ -179,7 +179,7 @@ impl<'c> Context<'c> {
         }
     }
 
-    pub fn flush_print<C: KesConsole>(&mut self, console: &mut C) {
+    pub fn flush_print<C: Console>(&mut self, console: &mut C) {
         for v in self.current_block().drain(..) {
             console.print(v);
         }
@@ -190,7 +190,7 @@ impl<'c> Context<'c> {
         self.bump
     }
 
-    pub async fn run_instruction<B: Builtin, C: KesConsole>(&mut self, builtin: &mut B, console: &mut C, inst: Instruction<'c>) {
+    pub async fn run_instruction<B: Builtin, C: Console>(&mut self, builtin: &mut B, console: &mut C, inst: Instruction<'c>) {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
@@ -276,7 +276,7 @@ impl<'c> Context<'c> {
         self.cursor += 1;
     }
 
-    pub async fn run<B: Builtin, C: KesConsole>(mut self, mut builtin: B, mut console: C) {
+    pub async fn run<B: Builtin, C: Console>(mut self, mut builtin: B, mut console: C) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
             self.run_instruction(&mut builtin, &mut console, instruction).await;
         }
