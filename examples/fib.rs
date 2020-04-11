@@ -1,7 +1,7 @@
 use kes::async_trait;
 use kes::builtin::DummyBuiltin;
 use kes::bumpalo::Bump;
-use kes::console::Console;
+use kes::console::KesConsole;
 use kes::context::Context;
 use kes::parser::parse;
 use kes::value::Value;
@@ -9,7 +9,7 @@ use kes::value::Value;
 pub struct StdioPrinter;
 
 #[async_trait(?Send)]
-impl Console for StdioPrinter {
+impl KesConsole for StdioPrinter {
     #[inline]
     fn print(&mut self, v: Value) {
         print!("{}", v);
