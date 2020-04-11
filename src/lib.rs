@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "unstable", feature(track_caller))]
 
 pub mod builtin;
-pub mod console;
 pub mod context;
 pub mod error;
 pub mod instruction;
@@ -14,4 +13,3 @@ pub mod value;
 pub use bumpalo;
 
 pub use async_trait::async_trait;
-

@@ -1,5 +1,4 @@
 use crate::builtin::Builtin;
-use crate::console::KesConsole;
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::value::Value;
@@ -179,9 +178,9 @@ impl<'c> Context<'c> {
         }
     }
 
-    pub fn flush_print<C: KesConsole>(&mut self, console: &mut C) {
+    pub fn flush_print<B: Builtin>(&mut self, builtin: &mut B) {
         for v in self.current_block().drain(..) {
-            console.print(v);
+            builtin.print(v);
         }
     }
 
@@ -190,7 +189,7 @@ impl<'c> Context<'c> {
         self.bump
     }
 
-    pub async fn run_instruction<B: Builtin, C: KesConsole>(&mut self, builtin: &mut B, console: &mut C, inst: Instruction<'c>) {
+    pub async fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
@@ -210,7 +209,7 @@ impl<'c> Context<'c> {
                 self.push(builtin.load(name, self.bump));
             }
             Instruction::CallBuiltin(name) => {
-                let ret = builtin.run(name, self, console).await;
+                let ret = builtin.run(name, self).await;
                 self.stack.pop();
                 if let Some(ret) = ret {
                     self.push(ret);
@@ -234,16 +233,16 @@ impl<'c> Context<'c> {
                 self.stack.pop();
             }
             Instruction::Print => {
-                self.flush_print(console);
+                self.flush_print(builtin);
             }
             Instruction::PrintLine => {
-                self.flush_print(console);
-                console.new_line();
+                self.flush_print(builtin);
+                builtin.new_line();
             }
             Instruction::PrintWait => {
-                self.flush_print(console);
-                console.new_line();
-                console.wait().await;
+                self.flush_print(builtin);
+                builtin.new_line();
+                builtin.wait().await;
             }
             Instruction::Duplicate => {
                 let item = self.peek().copied().unwrap();
@@ -276,17 +275,16 @@ impl<'c> Context<'c> {
         self.cursor += 1;
     }
 
-    pub async fn run<B: Builtin, C: KesConsole>(mut self, mut builtin: B, mut console: C) {
+    pub async fn run<B: Builtin>(mut self, mut builtin: B) {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            self.run_instruction(&mut builtin, &mut console, instruction).await;
+            self.run_instruction(&mut builtin, instruction).await;
         }
     }
 }
 
 #[cfg(test)]
-fn try_test(code: &str, expected_builtin: &str, expected_console: &str) {
+fn try_test(code: &str, expected: &str) {
     use crate::builtin::RecordBuiltin;
-    use crate::console::RecordConsole;
     use crate::parser::parse;
     use pretty_assertions::assert_eq;
 
@@ -294,13 +292,11 @@ fn try_test(code: &str, expected_builtin: &str, expected_console: &str) {
     let instructions = parse(&bump, code).unwrap();
 
     let mut builtin = RecordBuiltin::new();
-    let mut console = RecordConsole::new();
     let ctx = Context::new(&bump, &instructions);
 
-    futures::executor::block_on(ctx.run(&mut builtin, &mut console));
+    futures::executor::block_on(ctx.run(&mut builtin));
 
-    assert_eq!(builtin.0, expected_builtin);
-    assert_eq!(console.0, expected_console);
+    assert_eq!(builtin.text(), expected);
 }
 
 #[test]
@@ -313,7 +309,6 @@ fn pop_external_test() {
 }
 @
 ",
-        "",
         "4@#235@",
     );
 }
@@ -334,7 +329,6 @@ fn str_select_test() {
     }
 }
 ",
-        "",
         "4",
     );
 }
@@ -343,17 +337,16 @@ fn str_select_test() {
 fn if_test() {
     try_test(
         "만약 1 ~ { '2'@ } 그외 { '3'@ } 만약 0 { '3'@ } 그외 {  '4'@ }",
-        "",
         "3@4@",
     );
 }
 
 #[test]
 fn loop_test() {
-    try_test("1 [$0] 반복 $0 10 < { $0: $0 1 + [$0] } $0:", "", "12345678910");
+    try_test("1 [$0] 반복 $0 10 < { $0: $0 1 + [$0] } $0:", "12345678910");
 }
 
 #[test]
 fn complex_test() {
-    try_test("1 2 + [$0] 만약 $0 3 = { 선택 $0 { 1 { 2: } 3 { '?': } _ { '1': } } } 그외 { 만약 3 { 4: } 만약 '1' { 1: } } $0:", "", "?3");
+    try_test("1 2 + [$0] 만약 $0 3 = { 선택 $0 { 1 { 2: } 3 { '?': } _ { '1': } } } 그외 { 만약 3 { 4: } 만약 '1' { 1: } } $0:", "?3");
 }
