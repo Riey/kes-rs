@@ -23,3 +23,21 @@ pub enum Instruction<'s> {
     StartBlock,
     EndBlock,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct InstructionWithDebug<'s> {
+    pub inst: Instruction<'s>,
+    pub line_no: usize,
+}
+
+impl<'s> InstructionWithDebug<'s> {
+    pub fn new(inst: Instruction<'s>, line_no: usize) -> Self {
+        Self { inst, line_no }
+    }
+}
+
+impl<'s> PartialEq<Instruction<'s>> for InstructionWithDebug<'s> {
+    fn eq(&self, other: &Instruction<'s>) -> bool {
+        self.inst == *other
+    }
+}

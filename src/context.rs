@@ -1,6 +1,7 @@
 use crate::builtin::Builtin;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
+use crate::instruction::InstructionWithDebug;
 use crate::operator::Operator;
 use crate::value::Value;
 use crate::value::ValueConvertError;
@@ -13,25 +14,19 @@ use std::fmt::Write;
 
 pub struct Context<'c> {
     pub bump: &'c Bump,
-    pub instructions: &'c [Instruction<'c>],
+    pub instructions: &'c [InstructionWithDebug<'c>],
     pub stack: Vec<'c, Vec<'c, Value<'c>>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
-    instruction_line_no: &'c [usize],
     cursor: usize,
 }
 
 impl<'c> Context<'c> {
-    pub fn new(
-        bump: &'c Bump,
-        instructions: &'c [Instruction<'c>],
-        instruction_line_no: &'c [usize],
-    ) -> Self {
+    pub fn new(bump: &'c Bump, instructions: &'c [InstructionWithDebug<'c>]) -> Self {
         Self {
             bump,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             variables: AHashMap::new(),
-            instruction_line_no,
             cursor: 0,
         }
     }
@@ -215,10 +210,7 @@ impl<'c> Context<'c> {
     }
 
     fn current_instruction_line_no(&self) -> usize {
-        self.instruction_line_no
-            .get(self.cursor)
-            .copied()
-            .unwrap_or(0)
+        self.instructions[self.cursor].line_no
     }
 
     fn make_err(&self, msg: &'static str) -> RuntimeError {
@@ -233,9 +225,9 @@ impl<'c> Context<'c> {
     pub async fn run_instruction<B: Builtin>(
         &mut self,
         builtin: &mut B,
-        inst: Instruction<'c>,
+        inst: InstructionWithDebug<'c>,
     ) -> RuntimeResult<()> {
-        match inst {
+        match inst.inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
                 return Ok(());
@@ -337,10 +329,10 @@ fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
     use crate::parser::parse;
 
     let bump = Bump::with_capacity(8196);
-    let (instructions, inst_line) = parse(&bump, code).unwrap();
+    let instructions = parse(&bump, code).unwrap();
 
     let mut builtin = RecordBuiltin::new();
-    let ctx = Context::new(&bump, &instructions, &inst_line);
+    let ctx = Context::new(&bump, &instructions);
 
     futures::executor::block_on(ctx.run(&mut builtin))?;
 

@@ -1,4 +1,5 @@
 use crate::instruction::Instruction;
+use crate::instruction::InstructionWithDebug;
 use crate::lexer::Lexer;
 use crate::operator::Operator;
 use crate::token::Token;
@@ -35,8 +36,7 @@ enum BlockState {
 
 struct Parser<'b, 's> {
     lexer: Lexer<'s>,
-    instruction_line_no: Vec<'b, usize>,
-    ret: Vec<'b, Instruction<'s>>,
+    ret: Vec<'b, InstructionWithDebug<'s>>,
 }
 
 impl<'b, 's> Parser<'b, 's> {
@@ -44,7 +44,6 @@ impl<'b, 's> Parser<'b, 's> {
         let mut ret = Self {
             lexer: Lexer::new(source),
             ret: Vec::with_capacity_in(3000, bump),
-            instruction_line_no: Vec::with_capacity_in(3000, bump),
         };
 
         ret.push(Instruction::StartBlock);
@@ -54,8 +53,8 @@ impl<'b, 's> Parser<'b, 's> {
 
     #[inline]
     fn push(&mut self, instruction: Instruction<'s>) {
-        self.ret.push(instruction);
-        self.instruction_line_no.push(self.lexer.line());
+        self.ret
+            .push(InstructionWithDebug::new(instruction, self.lexer.line()));
     }
 
     #[inline]
@@ -149,7 +148,10 @@ impl<'b, 's> Parser<'b, 's> {
             Token::OpenBrace => return Ok(Some(State::OpenBrace)),
             Token::CloseBrace => return Ok(Some(State::CloseBrace)),
             Token::OpenParan => match self.ret.pop() {
-                Some(Instruction::LoadBuiltin(ident)) => {
+                Some(InstructionWithDebug {
+                    inst: Instruction::LoadBuiltin(ident),
+                    ..
+                }) => {
                     call_stack.push(ident);
                     self.push(Instruction::StartBlock);
                 }
@@ -229,7 +231,7 @@ impl<'b, 's> Parser<'b, 's> {
         Ok(())
     }
 
-    fn parse(mut self) -> Result<(Vec<'b, Instruction<'s>>, Vec<'b, usize>)> {
+    fn parse(mut self) -> Result<Vec<'b, InstructionWithDebug<'s>>> {
         let mut wait_block_stack: ArrayVec<[_; 50]> = ArrayVec::new();
         let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
         let mut call_stack: ArrayVec<[_; 20]> = ArrayVec::new();
@@ -292,25 +294,27 @@ impl<'b, 's> Parser<'b, 's> {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos());
+                                self.ret[top as usize].inst =
+                                    Instruction::GotoIfNot(self.next_pos());
                             }
                             BlockState::ElseIfBlock(if_end, top) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[if_end as usize] = Instruction::Goto(self.next_pos());
+                                self.ret[if_end as usize].inst = Instruction::Goto(self.next_pos());
                                 if let Some(state) = self.try_strip_token_else_or_else_if() {
                                     wait_block_stack.push(state);
                                     self.push(Instruction::Nop);
                                 }
-                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos());
+                                self.ret[top as usize].inst =
+                                    Instruction::GotoIfNot(self.next_pos());
                             }
                             BlockState::ElseBlock(end) => {
                                 self.push(Instruction::EndBlock);
-                                self.ret[end as usize] = Instruction::Goto(self.next_pos());
+                                self.ret[end as usize].inst = Instruction::Goto(self.next_pos());
                             }
                             BlockState::LoopBlock(loop_start, cond_end) => {
                                 self.push(Instruction::EndBlock);
                                 self.push(Instruction::Goto(loop_start));
-                                self.ret[cond_end as usize] =
+                                self.ret[cond_end as usize].inst =
                                     Instruction::GotoIfNot(self.next_pos());
                             }
                             BlockState::SelectBlock => {
@@ -320,9 +324,10 @@ impl<'b, 's> Parser<'b, 's> {
                                 self.push(Instruction::EndBlock);
                                 let pos = self.next_pos();
                                 self.push(Instruction::Nop);
-                                self.ret[top as usize] = Instruction::GotoIfNot(self.next_pos());
+                                self.ret[top as usize].inst =
+                                    Instruction::GotoIfNot(self.next_pos());
                                 if prev_end != 0 {
-                                    self.ret[prev_end as usize] = Instruction::Goto(pos);
+                                    self.ret[prev_end as usize].inst = Instruction::Goto(pos);
                                 }
                                 if !self.peek_next_is_close_brace() {
                                     self.read_select_arm(pos, &mut wait_block_stack)?;
@@ -333,7 +338,7 @@ impl<'b, 's> Parser<'b, 's> {
                             BlockState::SelectElseBlock(prev_end) => {
                                 self.push(Instruction::EndBlock);
                                 if prev_end != 0 {
-                                    self.ret[prev_end as usize] =
+                                    self.ret[prev_end as usize].inst =
                                         Instruction::Goto(self.next_pos());
                                 }
                             }
@@ -347,14 +352,11 @@ impl<'b, 's> Parser<'b, 's> {
             }
         }
 
-        Ok((self.ret, self.instruction_line_no))
+        Ok(self.ret)
     }
 }
 
-pub fn parse<'b, 's>(
-    bump: &'b Bump,
-    source: &'s str,
-) -> Result<(Vec<'b, Instruction<'s>>, Vec<'b, usize>)> {
+pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, InstructionWithDebug<'s>>> {
     Parser::new(bump, source).parse()
 }
 
@@ -365,7 +367,25 @@ fn parse_test(source: &str, instructions: &[Instruction]) {
 
     let bump = Bump::new();
 
-    assert_eq!(parse(&bump, source).unwrap().0, instructions);
+    assert_eq!(parse(&bump, source).unwrap(), instructions);
+}
+
+#[test]
+fn parse_line_no_test() {
+    use pretty_assertions::assert_eq;
+
+    let bump = Bump::new();
+
+    let inst = parse(
+        &bump,
+        "
+    만약 테스트 { 1 }
+    2",
+    )
+    .unwrap();
+
+    assert_eq!(inst[1].line_no, 2);
+    assert_eq!(inst.last().unwrap().line_no, 3);
 }
 
 #[test]

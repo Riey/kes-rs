@@ -35,9 +35,9 @@ impl Builtin for StdioBuiltin {
 fn main() {
     let bump = Bump::with_capacity(8196);
 
-    let (script, line_no) = parse(&bump, include_str!("fib.kes")).unwrap();
+    let script = parse(&bump, include_str!("fib.kes")).unwrap();
 
-    let ctx = Context::new(&bump, &script, &line_no);
+    let ctx = Context::new(&bump, &script);
 
     futures::executor::block_on(ctx.run(StdioBuiltin)).unwrap();
 }
