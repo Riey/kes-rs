@@ -1,4 +1,5 @@
 use crate::builtin::Builtin;
+use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::value::Value;
@@ -6,6 +7,7 @@ use ahash::AHashMap;
 use arrayvec::ArrayVec;
 use bumpalo::collections::{String, Vec};
 use bumpalo::Bump;
+use std::any::{type_name, Any};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
@@ -14,16 +16,22 @@ pub struct Context<'c> {
     pub instructions: &'c [Instruction<'c>],
     pub stack: Vec<'c, Vec<'c, Value<'c>>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
+    instruction_line_no: &'c [usize],
     cursor: usize,
 }
 
 impl<'c> Context<'c> {
-    pub fn new(bump: &'c Bump, instructions: &'c [Instruction<'c>]) -> Self {
+    pub fn new(
+        bump: &'c Bump,
+        instructions: &'c [Instruction<'c>],
+        instruction_line_no: &'c [usize],
+    ) -> Self {
         Self {
             bump,
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             variables: AHashMap::new(),
+            instruction_line_no,
             cursor: 0,
         }
     }
@@ -52,6 +60,16 @@ impl<'c> Context<'c> {
     }
 
     #[inline]
+    pub fn pop_into_ret<T: TryFrom<Value<'c>>>(&mut self) -> RuntimeResult<T>
+    where
+        T: Any,
+    {
+        self.pop_ret()?.try_into().map_err(|_| {
+            RuntimeError::TypeError(type_name::<T>(), self.current_instruction_line_no())
+        })
+    }
+
+    #[inline]
     pub fn peek(&mut self) -> Option<&mut Value<'c>> {
         self.current_block().last_mut()
     }
@@ -71,19 +89,19 @@ impl<'c> Context<'c> {
         self.pop_into()
     }
 
-    pub fn run_operator(&mut self, op: Operator) {
+    pub fn run_operator(&mut self, op: Operator) -> RuntimeResult<()> {
         macro_rules! binop {
             ($op:tt) => {
-                let rhs = self.pop_u32();
-                let lhs = self.pop_u32();
+                let rhs: u32 = self.pop_into_ret()?;
+                let lhs: u32 = self.pop_into_ret()?;
                 self.push(lhs $op rhs);
             };
         }
 
         macro_rules! binop_bool {
             ($op:tt) => {
-                let rhs = self.pop_bool();
-                let lhs = self.pop_bool();
+                let rhs = self.pop_ret()?.into_bool();
+                let lhs = self.pop_ret()?.into_bool();
                 self.push(if lhs $op rhs {
                     1
                 } else {
@@ -94,8 +112,8 @@ impl<'c> Context<'c> {
 
         macro_rules! binop_raw_bool {
             ($op:tt) => {
-                let rhs = self.pop().unwrap();
-                let lhs = self.pop().unwrap();
+                let rhs = self.pop_ret()?;
+                let lhs = self.pop_ret()?;
                 self.push(if lhs $op rhs {
                     1
                 } else {
@@ -133,13 +151,13 @@ impl<'c> Context<'c> {
                 binop_bool!(^);
             }
             Operator::Not => {
-                let b = self.pop_bool();
+                let b = self.pop_ret()?.into_bool();
 
                 self.push(if !b { 1 } else { 0 });
             }
             Operator::Add => {
-                let rhs = self.pop().unwrap();
-                let lhs = self.pop().unwrap();
+                let rhs = self.pop_ret()?;
+                let lhs = self.pop_ret()?;
 
                 self.push(match (lhs, rhs) {
                     (Value::Int(l), Value::Int(r)) => Value::Int(l + r),
@@ -176,6 +194,8 @@ impl<'c> Context<'c> {
                 binop!(%);
             }
         }
+
+        Ok(())
     }
 
     pub fn flush_print<B: Builtin>(&mut self, builtin: &mut B) {
@@ -184,16 +204,40 @@ impl<'c> Context<'c> {
         }
     }
 
+    pub fn pop_ret(&mut self) -> RuntimeResult<Value<'c>> {
+        self.pop().ok_or(self.make_err("인자가 부족합니다"))
+    }
+
+    pub fn peek_ret(&mut self) -> RuntimeResult<&mut Value<'c>> {
+        let err = self.make_err("인자가 없습니다");
+        self.peek().ok_or(err)
+    }
+
+    fn current_instruction_line_no(&self) -> usize {
+        self.instruction_line_no
+            .get(self.cursor)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    fn make_err(&self, msg: &'static str) -> RuntimeError {
+        RuntimeError::ExecutionError(msg, self.current_instruction_line_no())
+    }
+
     #[inline]
     pub fn bump(&self) -> &'c Bump {
         self.bump
     }
 
-    pub async fn run_instruction<B: Builtin>(&mut self, builtin: &mut B, inst: Instruction<'c>) {
+    pub async fn run_instruction<B: Builtin>(
+        &mut self,
+        builtin: &mut B,
+        inst: Instruction<'c>,
+    ) -> RuntimeResult<()> {
         match inst {
             Instruction::Exit => {
                 self.cursor = self.instructions.len();
-                return;
+                return Ok(());
             }
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
@@ -202,7 +246,7 @@ impl<'c> Context<'c> {
                 self.push(item);
             }
             Instruction::StoreVar(name) => {
-                let item = self.pop().unwrap();
+                let item = self.pop_ret()?;
                 self.variables.insert(name, item);
             }
             Instruction::LoadBuiltin(name) => {
@@ -215,15 +259,15 @@ impl<'c> Context<'c> {
                     self.push(ret);
                 }
             }
-            Instruction::Operator(op) => self.run_operator(op),
+            Instruction::Operator(op) => self.run_operator(op)?,
             Instruction::Goto(pos) => {
                 self.cursor = pos as usize;
-                return;
+                return Ok(());
             }
             Instruction::GotoIfNot(pos) => {
-                if !self.pop().unwrap().into_bool() {
+                if !self.pop_ret()?.into_bool() {
                     self.cursor = pos as usize;
-                    return;
+                    return Ok(());
                 }
             }
             Instruction::StartBlock => {
@@ -245,7 +289,7 @@ impl<'c> Context<'c> {
                 builtin.wait().await;
             }
             Instruction::Duplicate => {
-                let item = self.peek().copied().unwrap();
+                let item = *self.peek_ret()?;
                 self.push(item);
             }
             Instruction::Nop => {}
@@ -264,8 +308,8 @@ impl<'c> Context<'c> {
                 self.stack[pos].extend(buf);
             }
             Instruction::Conditional => {
-                let rhs = self.pop().unwrap();
-                let lhs = self.pop().unwrap();
+                let rhs = self.pop_ret()?;
+                let lhs = self.pop_ret()?;
                 let cond = self.pop_bool();
 
                 self.push(if cond { lhs } else { rhs });
@@ -273,12 +317,16 @@ impl<'c> Context<'c> {
         }
 
         self.cursor += 1;
+
+        Ok(())
     }
 
-    pub async fn run<B: Builtin>(mut self, mut builtin: B) {
+    pub async fn run<B: Builtin>(mut self, mut builtin: B) -> RuntimeResult<()> {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            self.run_instruction(&mut builtin, instruction).await;
+            self.run_instruction(&mut builtin, instruction).await?;
         }
+
+        Ok(())
     }
 }
 
@@ -289,12 +337,12 @@ fn try_test(code: &str, expected: &str) {
     use pretty_assertions::assert_eq;
 
     let bump = Bump::with_capacity(8196);
-    let instructions = parse(&bump, code).unwrap();
+    let (instructions, inst_line) = parse(&bump, code).unwrap();
 
     let mut builtin = RecordBuiltin::new();
-    let ctx = Context::new(&bump, &instructions);
+    let ctx = Context::new(&bump, &instructions, &inst_line);
 
-    futures::executor::block_on(ctx.run(&mut builtin));
+    futures::executor::block_on(ctx.run(&mut builtin)).unwrap();
 
     assert_eq!(builtin.text(), expected);
 }

@@ -35,6 +35,7 @@ enum BlockState {
 
 struct Parser<'b, 's> {
     lexer: Lexer<'s>,
+    instruction_line_no: Vec<'b, usize>,
     ret: Vec<'b, Instruction<'s>>,
 }
 
@@ -43,6 +44,7 @@ impl<'b, 's> Parser<'b, 's> {
         let mut ret = Self {
             lexer: Lexer::new(source),
             ret: Vec::with_capacity_in(3000, bump),
+            instruction_line_no: Vec::with_capacity_in(3000, bump),
         };
 
         ret.push(Instruction::StartBlock);
@@ -53,6 +55,7 @@ impl<'b, 's> Parser<'b, 's> {
     #[inline]
     fn push(&mut self, instruction: Instruction<'s>) {
         self.ret.push(instruction);
+        self.instruction_line_no.push(self.lexer.line());
     }
 
     #[inline]
@@ -226,7 +229,7 @@ impl<'b, 's> Parser<'b, 's> {
         Ok(())
     }
 
-    fn parse(mut self) -> Result<Vec<'b, Instruction<'s>>> {
+    fn parse(mut self) -> Result<(Vec<'b, Instruction<'s>>, Vec<'b, usize>)> {
         let mut wait_block_stack: ArrayVec<[_; 50]> = ArrayVec::new();
         let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
         let mut call_stack: ArrayVec<[_; 20]> = ArrayVec::new();
@@ -344,11 +347,14 @@ impl<'b, 's> Parser<'b, 's> {
             }
         }
 
-        Ok(self.ret)
+        Ok((self.ret, self.instruction_line_no))
     }
 }
 
-pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, Instruction<'s>>> {
+pub fn parse<'b, 's>(
+    bump: &'b Bump,
+    source: &'s str,
+) -> Result<(Vec<'b, Instruction<'s>>, Vec<'b, usize>)> {
     Parser::new(bump, source).parse()
 }
 
@@ -359,7 +365,7 @@ fn parse_test(source: &str, instructions: &[Instruction]) {
 
     let bump = Bump::new();
 
-    assert_eq!(parse(&bump, source).unwrap(), instructions);
+    assert_eq!(parse(&bump, source).unwrap().0, instructions);
 }
 
 #[test]
