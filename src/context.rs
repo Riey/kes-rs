@@ -3,11 +3,11 @@ use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::operator::Operator;
 use crate::value::Value;
+use crate::value::ValueConvertError;
 use ahash::AHashMap;
 use arrayvec::ArrayVec;
 use bumpalo::collections::{String, Vec};
 use bumpalo::Bump;
-use std::any::{type_name, Any};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
@@ -60,13 +60,14 @@ impl<'c> Context<'c> {
     }
 
     #[inline]
-    pub fn pop_into_ret<T: TryFrom<Value<'c>>>(&mut self) -> RuntimeResult<T>
-    where
-        T: Any,
-    {
-        self.pop_ret()?.try_into().map_err(|_| {
-            RuntimeError::TypeError(type_name::<T>(), self.current_instruction_line_no())
-        })
+    pub fn pop_into_ret<T: TryFrom<Value<'c>, Error = ValueConvertError>>(
+        &mut self,
+    ) -> RuntimeResult<T> {
+        self.pop_ret()?
+            .try_into()
+            .map_err(|err: ValueConvertError| {
+                RuntimeError::TypeError(err.0, self.current_instruction_line_no())
+            })
     }
 
     #[inline]
@@ -331,10 +332,9 @@ impl<'c> Context<'c> {
 }
 
 #[cfg(test)]
-fn try_test(code: &str, expected: &str) {
+fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
     use crate::builtin::RecordBuiltin;
     use crate::parser::parse;
-    use pretty_assertions::assert_eq;
 
     let bump = Bump::with_capacity(8196);
     let (instructions, inst_line) = parse(&bump, code).unwrap();
@@ -342,9 +342,34 @@ fn try_test(code: &str, expected: &str) {
     let mut builtin = RecordBuiltin::new();
     let ctx = Context::new(&bump, &instructions, &inst_line);
 
-    futures::executor::block_on(ctx.run(&mut builtin)).unwrap();
+    futures::executor::block_on(ctx.run(&mut builtin))?;
 
-    assert_eq!(builtin.text(), expected);
+    Ok(builtin)
+}
+
+#[cfg(test)]
+fn try_test(code: &str, expected: &str) {
+    use pretty_assertions::assert_eq;
+
+    assert_eq!(test_impl(code).unwrap().text(), expected);
+}
+
+#[test]
+fn error_line_no() {
+    let err = test_impl(
+        "
+    2 '2' +
+    ; 3번째줄
+    1 '1' - ;4번째줄
+    ",
+    )
+    .err()
+    .unwrap();
+
+    match err {
+        RuntimeError::TypeError("str", 4) => {}
+        _ => panic!("unexpected error"),
+    }
 }
 
 #[test]

@@ -12,6 +12,13 @@ impl<'b> Value<'b> {
     pub fn into_bool(self) -> bool {
         self.into()
     }
+
+    pub fn type_name(self) -> &'static str {
+        match self {
+            Value::Int(..) => "int",
+            Value::Str(..) => "str",
+        }
+    }
 }
 
 impl<'b> Display for Value<'b> {
@@ -66,8 +73,9 @@ impl<'b> From<&'b mut str> for Value<'b> {
     }
 }
 
+/// Contains actual type name
 #[derive(Debug)]
-pub struct ValueConvertError;
+pub struct ValueConvertError(pub &'static str);
 
 impl<'b> TryFrom<Value<'b>> for u32 {
     type Error = ValueConvertError;
@@ -76,7 +84,7 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n),
-            _ => Err(ValueConvertError),
+            _ => Err(ValueConvertError(v.type_name())),
         }
     }
 }
@@ -88,7 +96,7 @@ impl<'b> TryFrom<Value<'b>> for usize {
     fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n as usize),
-            _ => Err(ValueConvertError),
+            _ => Err(ValueConvertError(v.type_name())),
         }
     }
 }
@@ -100,7 +108,7 @@ impl<'b> TryFrom<Value<'b>> for &'b str {
     fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
         match v {
             Value::Str(s) => Ok(s),
-            _ => Err(ValueConvertError),
+            _ => Err(ValueConvertError(v.type_name())),
         }
     }
 }
