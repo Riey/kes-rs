@@ -222,7 +222,7 @@ impl<'c> Context<'c> {
         self.bump
     }
 
-    pub async fn run_instruction<B: Builtin>(
+    pub fn run_instruction<B: Builtin>(
         &mut self,
         builtin: &mut B,
         inst: InstructionWithDebug<'c>,
@@ -246,7 +246,7 @@ impl<'c> Context<'c> {
                 self.push(builtin.load(name, self.bump));
             }
             Instruction::CallBuiltin(name) => {
-                let ret = builtin.run(name, self).await;
+                let ret = builtin.run(name, self);
                 self.stack.pop();
                 if let Some(ret) = ret {
                     self.push(ret);
@@ -279,7 +279,7 @@ impl<'c> Context<'c> {
             Instruction::PrintWait => {
                 self.flush_print(builtin);
                 builtin.new_line();
-                builtin.wait().await;
+                builtin.wait();
             }
             Instruction::Duplicate => {
                 let item = *self.peek_ret()?;
@@ -314,9 +314,9 @@ impl<'c> Context<'c> {
         Ok(())
     }
 
-    pub async fn run<B: Builtin>(mut self, mut builtin: B) -> RuntimeResult<()> {
+    pub fn run<B: Builtin>(mut self, mut builtin: B) -> RuntimeResult<()> {
         while let Some(&instruction) = self.instructions.get(self.cursor) {
-            self.run_instruction(&mut builtin, instruction).await?;
+            self.run_instruction(&mut builtin, instruction)?;
         }
 
         Ok(())
@@ -334,7 +334,7 @@ fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
     let mut builtin = RecordBuiltin::new();
     let ctx = Context::new(&bump, &instructions);
 
-    futures::executor::block_on(ctx.run(&mut builtin))?;
+    ctx.run(&mut builtin)?;
 
     Ok(builtin)
 }

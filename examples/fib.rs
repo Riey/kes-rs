@@ -1,4 +1,3 @@
-use kes::async_trait;
 use kes::builtin::Builtin;
 use kes::bumpalo::Bump;
 use kes::context::Context;
@@ -7,10 +6,9 @@ use kes::value::Value;
 
 pub struct StdioBuiltin;
 
-#[async_trait(?Send)]
 impl Builtin for StdioBuiltin {
     #[inline]
-    async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
+    fn run<'c>(&mut self, _name: &str, _ctx: &mut Context<'c>) -> Option<Value<'c>> {
         unimplemented!();
     }
     #[inline]
@@ -26,7 +24,7 @@ impl Builtin for StdioBuiltin {
         println!();
     }
     #[inline]
-    async fn wait(&mut self) {
+    fn wait(&mut self) {
         let mut buf = String::new();
         std::io::stdin().read_line(&mut buf).unwrap();
     }
@@ -39,5 +37,5 @@ fn main() {
 
     let ctx = Context::new(&bump, &script);
 
-    futures::executor::block_on(ctx.run(StdioBuiltin)).unwrap();
+    ctx.run(StdioBuiltin).unwrap();
 }

@@ -1,22 +1,19 @@
 use crate::bumpalo::Bump;
 use crate::context::Context;
 use crate::value::Value;
-use async_trait::async_trait;
 
-#[async_trait(?Send)]
 pub trait Builtin {
-    async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) -> Option<Value<'c>>;
+    fn run<'c>(&mut self, name: &str, ctx: &mut Context<'c>) -> Option<Value<'c>>;
     fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b>;
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
-    async fn wait(&mut self);
+    fn wait(&mut self);
 }
 
-#[async_trait(?Send)]
 impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
-    async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
-        (**self).run(name, ctx).await
+    fn run<'c>(&mut self, name: &str, ctx: &mut Context<'c>) -> Option<Value<'c>> {
+        (**self).run(name, ctx)
     }
     #[inline]
     fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b> {
@@ -31,8 +28,8 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
         (**self).new_line();
     }
     #[inline]
-    async fn wait(&mut self) {
-        (**self).wait().await;
+    fn wait(&mut self) {
+        (**self).wait();
     }
 }
 
@@ -53,10 +50,9 @@ impl RecordBuiltin {
 }
 
 #[cfg(test)]
-#[async_trait(?Send)]
 impl Builtin for RecordBuiltin {
     #[inline]
-    async fn run<'c>(&mut self, name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
+    fn run<'c>(&mut self, name: &str, _ctx: &mut Context<'c>) -> Option<Value<'c>> {
         self.0.push_str(name);
         None
     }
@@ -76,7 +72,7 @@ impl Builtin for RecordBuiltin {
         self.0.push('@');
     }
     #[inline]
-    async fn wait(&mut self) {
+    fn wait(&mut self) {
         self.0.push('#');
     }
 }
