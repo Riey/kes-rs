@@ -1,5 +1,5 @@
 use crate::builtin::Builtin;
-use crate::error::{RuntimeError, RuntimeResult};
+use crate::error::{InterruptState, RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::instruction::InstructionWithDebug;
 use crate::operator::Operator;
@@ -12,11 +12,13 @@ use bumpalo::Bump;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
+#[derive(Clone)]
 pub struct Context<'c> {
     pub bump: &'c Bump,
     pub instructions: &'c [InstructionWithDebug<'c>],
     pub stack: Vec<'c, Vec<'c, Value<'c>>>,
     pub variables: AHashMap<&'c str, Value<'c>>,
+    interrupt_state: Option<InterruptState>,
     cursor: usize,
 }
 
@@ -27,6 +29,7 @@ impl<'c> Context<'c> {
             instructions,
             stack: Vec::with_capacity_in(50, bump),
             variables: AHashMap::new(),
+            interrupt_state: None,
             cursor: 0,
         }
     }
@@ -213,8 +216,20 @@ impl<'c> Context<'c> {
         self.instructions[self.cursor].line_no
     }
 
-    fn make_err(&self, msg: &'static str) -> RuntimeError {
-        RuntimeError::ExecutionError(msg, self.current_instruction_line_no())
+    pub fn make_err(&self, msg: impl Into<std::string::String>) -> RuntimeError {
+        RuntimeError::ExecutionError(msg.into(), self.current_instruction_line_no())
+    }
+
+    pub fn set_interrupt(&mut self) -> RuntimeError {
+        let state = match self.instructions[self.cursor].inst {
+            Instruction::CallBuiltin(name) | Instruction::LoadBuiltin(name) => {
+                InterruptState::Builtin(name.to_string())
+            }
+            _ => InterruptState::PrintWait,
+        };
+
+        self.interrupt_state = Some(state.clone());
+        RuntimeError::Interrupted(state)
     }
 
     #[inline]
@@ -243,12 +258,13 @@ impl<'c> Context<'c> {
                 self.variables.insert(name, item);
             }
             Instruction::LoadBuiltin(name) => {
-                self.push(builtin.load(name, self.bump));
+                let var = builtin.load(name, self)?;
+                self.push(var);
             }
             Instruction::CallBuiltin(name) => {
                 let ret = builtin.run(name, self);
                 self.stack.pop();
-                if let Some(ret) = ret {
+                if let Some(ret) = ret? {
                     self.push(ret);
                 }
             }
@@ -279,7 +295,7 @@ impl<'c> Context<'c> {
             Instruction::PrintWait => {
                 self.flush_print(builtin);
                 builtin.new_line();
-                builtin.wait();
+                return Err(RuntimeError::Interrupted(InterruptState::PrintWait));
             }
             Instruction::Duplicate => {
                 let item = *self.peek_ret()?;
@@ -314,7 +330,30 @@ impl<'c> Context<'c> {
         Ok(())
     }
 
-    pub fn run<B: Builtin>(mut self, mut builtin: B) -> RuntimeResult<()> {
+    pub fn is_interrupted(&self) -> bool {
+        self.interrupt_state.is_some()
+    }
+
+    pub fn interrupt_state(&self) -> Option<&InterruptState> {
+        self.interrupt_state.as_ref()
+    }
+
+    pub fn resume(&mut self, input: Option<Value<'c>>) {
+        if self.interrupt_state.is_some() {
+            if let Some(input) = input {
+                self.push(input);
+            }
+
+            self.cursor += 1;
+            self.interrupt_state = None;
+        }
+    }
+
+    pub fn run<B: Builtin>(&mut self, mut builtin: B) -> RuntimeResult<()> {
+        if let Some(ref state) = self.interrupt_state {
+            return Err(RuntimeError::Interrupted(state.clone()));
+        }
+
         while let Some(&instruction) = self.instructions.get(self.cursor) {
             self.run_instruction(&mut builtin, instruction)?;
         }
@@ -332,7 +371,7 @@ fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
     let instructions = parse(&bump, code).unwrap();
 
     let mut builtin = RecordBuiltin::new();
-    let ctx = Context::new(&bump, &instructions);
+    let mut ctx = Context::new(&bump, &instructions);
 
     ctx.run(&mut builtin)?;
 
@@ -347,6 +386,20 @@ fn try_test(code: &str, expected: &str) {
 }
 
 #[test]
+fn interrupt_wait() {
+    let err = test_impl(
+        "
+        '123'#
+        '456'
+        ",
+    )
+    .err()
+    .unwrap();
+
+    assert_eq!(err, RuntimeError::Interrupted(InterruptState::PrintWait));
+}
+
+#[test]
 fn error_line_no() {
     let err = test_impl(
         "
@@ -358,10 +411,7 @@ fn error_line_no() {
     .err()
     .unwrap();
 
-    match err {
-        RuntimeError::TypeError("str", 4) => {}
-        _ => panic!("unexpected error"),
-    }
+    assert_eq!(err, RuntimeError::TypeError("str", 4));
 }
 
 #[test]
@@ -370,11 +420,11 @@ fn pop_external_test() {
         "
 만약 1 2 ~= {
     2 3 [!]
-    4 5 [!1] #
+    4 5 [!1] @ 1 @
 }
 @
 ",
-        "4@#235@",
+        "4@1@235@",
     );
 }
 

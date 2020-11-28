@@ -1,23 +1,27 @@
-use crate::bumpalo::Bump;
 use crate::context::Context;
+use crate::error::RuntimeResult;
 use crate::value::Value;
 
 pub trait Builtin {
-    fn run<'c>(&mut self, name: &str, ctx: &mut Context<'c>) -> Option<Value<'c>>;
-    fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b>;
+    fn run<'c>(&mut self, name: &'c str, ctx: &mut Context<'c>)
+        -> RuntimeResult<Option<Value<'c>>>;
+    fn load<'c>(&mut self, name: &'c str, ctx: &mut Context<'c>) -> RuntimeResult<Value<'c>>;
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
-    fn wait(&mut self);
 }
 
 impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
-    fn run<'c>(&mut self, name: &str, ctx: &mut Context<'c>) -> Option<Value<'c>> {
+    fn run<'c>(
+        &mut self,
+        name: &'c str,
+        ctx: &mut Context<'c>,
+    ) -> RuntimeResult<Option<Value<'c>>> {
         (**self).run(name, ctx)
     }
     #[inline]
-    fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b> {
-        (**self).load(name, b)
+    fn load<'c>(&mut self, name: &'c str, ctx: &mut Context<'c>) -> RuntimeResult<Value<'c>> {
+        (**self).load(name, ctx)
     }
     #[inline]
     fn print(&mut self, v: Value) {
@@ -26,10 +30,6 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
     fn new_line(&mut self) {
         (**self).new_line();
-    }
-    #[inline]
-    fn wait(&mut self) {
-        (**self).wait();
     }
 }
 
@@ -52,15 +52,19 @@ impl RecordBuiltin {
 #[cfg(test)]
 impl Builtin for RecordBuiltin {
     #[inline]
-    fn run<'c>(&mut self, name: &str, _ctx: &mut Context<'c>) -> Option<Value<'c>> {
+    fn run<'c>(
+        &mut self,
+        name: &'c str,
+        _ctx: &mut Context<'c>,
+    ) -> RuntimeResult<Option<Value<'c>>> {
         self.0.push_str(name);
-        None
+        Ok(None)
     }
     #[inline]
-    fn load<'b>(&mut self, name: &str, _b: &'b Bump) -> Value<'b> {
+    fn load<'c>(&mut self, name: &'c str, _ctx: &mut Context<'c>) -> RuntimeResult<Value<'c>> {
         use std::fmt::Write;
         write!(self.0, "${}", name).unwrap();
-        Value::Int(0)
+        Ok(Value::Int(0))
     }
     #[inline]
     fn print(&mut self, v: Value) {
@@ -70,9 +74,5 @@ impl Builtin for RecordBuiltin {
     #[inline]
     fn new_line(&mut self) {
         self.0.push('@');
-    }
-    #[inline]
-    fn wait(&mut self) {
-        self.0.push('#');
     }
 }

@@ -1,6 +1,7 @@
 use kes::builtin::Builtin;
 use kes::bumpalo::Bump;
 use kes::context::Context;
+use kes::error::RuntimeResult;
 use kes::parser::parse;
 use kes::value::Value;
 
@@ -8,11 +9,15 @@ pub struct StdioBuiltin;
 
 impl Builtin for StdioBuiltin {
     #[inline]
-    fn run<'c>(&mut self, _name: &str, _ctx: &mut Context<'c>) -> Option<Value<'c>> {
-        unimplemented!();
+    fn run<'c>(
+        &mut self,
+        _name: &'c str,
+        _ctx: &mut Context<'c>,
+    ) -> RuntimeResult<Option<Value<'c>>> {
+        unimplemented!()
     }
     #[inline]
-    fn load<'b>(&mut self, _name: &str, _b: &'b Bump) -> Value<'b> {
+    fn load<'c>(&mut self, _name: &'c str, _ctx: &mut Context<'c>) -> RuntimeResult<Value<'c>> {
         unimplemented!();
     }
     #[inline]
@@ -23,11 +28,6 @@ impl Builtin for StdioBuiltin {
     fn new_line(&mut self) {
         println!();
     }
-    #[inline]
-    fn wait(&mut self) {
-        let mut buf = String::new();
-        std::io::stdin().read_line(&mut buf).unwrap();
-    }
 }
 
 fn main() {
@@ -35,7 +35,7 @@ fn main() {
 
     let script = parse(&bump, include_str!("fib.kes")).unwrap();
 
-    let ctx = Context::new(&bump, &script);
+    let mut ctx = Context::new(&bump, &script);
 
     ctx.run(StdioBuiltin).unwrap();
 }
