@@ -2,4 +2,5 @@
 /flamegraph*
 /perf*
 /.idea
+node_modules
 Cargo.lock

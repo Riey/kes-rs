@@ -25,3 +25,8 @@ arrayvec = "0.5.2"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
+
+[workspace]
+members = [
+    "lsp"
+]
