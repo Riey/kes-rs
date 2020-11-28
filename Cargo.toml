@@ -17,11 +17,11 @@ unstable = []
 debug = true
 
 [dependencies]
-memchr = "2.3.2"
+memchr = "2.3.4"
 bumpalo = { version = "3.4.0", features = ["collections"] }
-ahash = "0.4.4"
-thiserror = "1.0.20"
-arrayvec = "0.5.1"
+ahash = "0.6.1"
+thiserror = "1.0.22"
+arrayvec = "0.5.2"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
