@@ -3,7 +3,7 @@ use crate::context::Context;
 use crate::value::Value;
 use async_trait::async_trait;
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait Builtin {
     async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) -> Option<Value<'c>>;
     fn load<'b>(&mut self, name: &str, b: &'b Bump) -> Value<'b>;
@@ -12,7 +12,7 @@ pub trait Builtin {
     async fn wait(&mut self);
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
     async fn run<'c>(&mut self, name: &'_ str, ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
@@ -53,7 +53,7 @@ impl RecordBuiltin {
 }
 
 #[cfg(test)]
-#[async_trait(?Send)]
+#[async_trait]
 impl Builtin for RecordBuiltin {
     #[inline]
     async fn run<'c>(&mut self, name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {

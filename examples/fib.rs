@@ -7,7 +7,7 @@ use kes::value::Value;
 
 pub struct StdioBuiltin;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl Builtin for StdioBuiltin {
     #[inline]
     async fn run<'c>(&mut self, _name: &'_ str, _ctx: &'_ mut Context<'c>) -> Option<Value<'c>> {
