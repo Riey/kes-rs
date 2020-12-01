@@ -7,47 +7,45 @@ use crate::value::Value;
 use crate::value::ValueConvertError;
 use ahash::AHashMap;
 use arrayvec::ArrayVec;
-use bumpalo::collections::{String, Vec};
-use bumpalo::Bump;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
+static_assertions::assert_impl_all!(Context: Send, Sync);
+
 pub struct Context<'c> {
-    pub bump: &'c Bump,
     pub instructions: &'c [InstructionWithDebug<'c>],
-    pub stack: Vec<'c, Vec<'c, Value<'c>>>,
-    pub variables: AHashMap<&'c str, Value<'c>>,
+    pub stack: Vec<Vec<Value>>,
+    pub variables: AHashMap<&'c str, Value>,
     cursor: usize,
 }
 
 impl<'c> Context<'c> {
-    pub fn new(bump: &'c Bump, instructions: &'c [InstructionWithDebug<'c>]) -> Self {
+    pub fn new(instructions: &'c [InstructionWithDebug<'c>]) -> Self {
         Self {
-            bump,
             instructions,
-            stack: Vec::with_capacity_in(50, bump),
+            stack: Vec::with_capacity(50),
             variables: AHashMap::new(),
             cursor: 0,
         }
     }
 
     #[inline]
-    pub fn current_block(&mut self) -> &mut Vec<'c, Value<'c>> {
+    pub fn current_block(&mut self) -> &mut Vec<Value> {
         self.stack.last_mut().unwrap()
     }
 
     #[inline]
-    pub fn push(&mut self, v: impl Into<Value<'c>>) {
+    pub fn push(&mut self, v: impl Into<Value>) {
         self.current_block().push(v.into());
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<Value<'c>> {
+    pub fn pop(&mut self) -> Option<Value> {
         self.current_block().pop()
     }
 
     #[inline]
-    pub fn pop_into<T: TryFrom<Value<'c>>>(&mut self) -> T
+    pub fn pop_into<T: TryFrom<Value>>(&mut self) -> T
     where
         T::Error: std::fmt::Debug,
     {
@@ -55,7 +53,7 @@ impl<'c> Context<'c> {
     }
 
     #[inline]
-    pub fn pop_into_ret<T: TryFrom<Value<'c>, Error = ValueConvertError>>(
+    pub fn pop_into_ret<T: TryFrom<Value, Error = ValueConvertError>>(
         &mut self,
     ) -> RuntimeResult<T> {
         self.pop_ret()?
@@ -66,7 +64,7 @@ impl<'c> Context<'c> {
     }
 
     #[inline]
-    pub fn peek(&mut self) -> Option<&mut Value<'c>> {
+    pub fn peek(&mut self) -> Option<&mut Value> {
         self.current_block().last_mut()
     }
 
@@ -81,7 +79,7 @@ impl<'c> Context<'c> {
     }
 
     #[inline]
-    pub fn pop_str(&mut self) -> &'c str {
+    pub fn pop_str(&mut self) -> String {
         self.pop_into()
     }
 
@@ -158,23 +156,14 @@ impl<'c> Context<'c> {
                 self.push(match (lhs, rhs) {
                     (Value::Int(l), Value::Int(r)) => Value::Int(l + r),
                     (Value::Int(l), Value::Str(r)) => {
-                        let mut buf = String::with_capacity_in(r.len() + 10, self.bump);
-                        write!(&mut buf, "{}", l).unwrap();
-                        buf.push_str(r);
-                        Value::Str(buf.into_bump_str())
+                        let str = format!("{}{}", l, r);
+                        Value::Str(str)
                     }
-                    (Value::Str(l), Value::Int(r)) => {
-                        let mut buf = String::with_capacity_in(l.len() + 10, self.bump);
-                        buf.push_str(l);
-                        write!(&mut buf, "{}", r).unwrap();
-                        Value::Str(buf.into_bump_str())
+                    (Value::Str(mut l), Value::Int(r)) => {
+                        write!(&mut l, "{}", r).unwrap();
+                        Value::Str(l)
                     }
-                    (Value::Str(l), Value::Str(r)) => {
-                        let mut buf = String::with_capacity_in(l.len() + r.len(), self.bump);
-                        buf.push_str(l);
-                        buf.push_str(r);
-                        Value::Str(buf.into_bump_str())
-                    }
+                    (Value::Str(l), Value::Str(r)) => Value::Str(l + &r),
                 });
             }
             Operator::Sub => {
@@ -200,11 +189,11 @@ impl<'c> Context<'c> {
         }
     }
 
-    pub fn pop_ret(&mut self) -> RuntimeResult<Value<'c>> {
+    pub fn pop_ret(&mut self) -> RuntimeResult<Value> {
         self.pop().ok_or(self.make_err("인자가 부족합니다"))
     }
 
-    pub fn peek_ret(&mut self) -> RuntimeResult<&mut Value<'c>> {
+    pub fn peek_ret(&mut self) -> RuntimeResult<&mut Value> {
         let err = self.make_err("인자가 없습니다");
         self.peek().ok_or(err)
     }
@@ -215,11 +204,6 @@ impl<'c> Context<'c> {
 
     fn make_err(&self, msg: &'static str) -> RuntimeError {
         RuntimeError::ExecutionError(msg, self.current_instruction_line_no())
-    }
-
-    #[inline]
-    pub fn bump(&self) -> &'c Bump {
-        self.bump
     }
 
     pub async fn run_instruction<B: Builtin>(
@@ -235,7 +219,7 @@ impl<'c> Context<'c> {
             Instruction::LoadInt(num) => self.push(num),
             Instruction::LoadStr(str) => self.push(str),
             Instruction::LoadVar(name) => {
-                let item = self.variables[name];
+                let item = self.variables[name].clone();
                 self.push(item);
             }
             Instruction::StoreVar(name) => {
@@ -243,7 +227,7 @@ impl<'c> Context<'c> {
                 self.variables.insert(name, item);
             }
             Instruction::LoadBuiltin(name) => {
-                self.push(builtin.load(name, self.bump));
+                self.push(builtin.load(name));
             }
             Instruction::CallBuiltin(name) => {
                 let ret = builtin.run(name, self).await;
@@ -264,7 +248,7 @@ impl<'c> Context<'c> {
                 }
             }
             Instruction::StartBlock => {
-                self.stack.push(Vec::with_capacity_in(10, self.bump()));
+                self.stack.push(Vec::with_capacity(10));
             }
             Instruction::EndBlock => {
                 self.stack.pop();
@@ -282,7 +266,7 @@ impl<'c> Context<'c> {
                 builtin.wait().await;
             }
             Instruction::Duplicate => {
-                let item = *self.peek_ret()?;
+                let item = self.peek_ret()?.clone();
                 self.push(item);
             }
             Instruction::Nop => {}
@@ -328,11 +312,10 @@ fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
     use crate::builtin::RecordBuiltin;
     use crate::parser::parse;
 
-    let bump = Bump::with_capacity(8196);
-    let instructions = parse(&bump, code).unwrap();
+    let instructions = parse(code).unwrap();
 
     let mut builtin = RecordBuiltin::new();
-    let ctx = Context::new(&bump, &instructions);
+    let ctx = Context::new(&instructions);
 
     futures::executor::block_on(ctx.run(&mut builtin))?;
 

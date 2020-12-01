@@ -5,8 +5,6 @@ use crate::operator::Operator;
 use crate::token::Token;
 use arrayvec::Array;
 use arrayvec::ArrayVec;
-use bumpalo::collections::Vec;
-use bumpalo::Bump;
 
 use crate::error::{ParserError as Error, ParserResult as Result};
 
@@ -34,16 +32,16 @@ enum BlockState {
     SelectElseBlock(u32),
 }
 
-struct Parser<'b, 's> {
+struct Parser<'s> {
     lexer: Lexer<'s>,
-    ret: Vec<'b, InstructionWithDebug<'s>>,
+    ret: Vec<InstructionWithDebug<'s>>,
 }
 
-impl<'b, 's> Parser<'b, 's> {
-    fn new(bump: &'b Bump, source: &'s str) -> Self {
+impl<'s> Parser<'s> {
+    fn new(source: &'s str) -> Self {
         let mut ret = Self {
             lexer: Lexer::new(source),
-            ret: Vec::with_capacity_in(3000, bump),
+            ret: Vec::with_capacity(3000),
         };
 
         ret.push(Instruction::StartBlock);
@@ -231,7 +229,7 @@ impl<'b, 's> Parser<'b, 's> {
         Ok(())
     }
 
-    fn parse(mut self) -> Result<Vec<'b, InstructionWithDebug<'s>>> {
+    fn parse(mut self) -> Result<Vec<InstructionWithDebug<'s>>> {
         let mut wait_block_stack: ArrayVec<[_; 50]> = ArrayVec::new();
         let mut block_stack: ArrayVec<[_; 100]> = ArrayVec::new();
         let mut call_stack: ArrayVec<[_; 20]> = ArrayVec::new();
@@ -356,8 +354,8 @@ impl<'b, 's> Parser<'b, 's> {
     }
 }
 
-pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, InstructionWithDebug<'s>>> {
-    Parser::new(bump, source).parse()
+pub fn parse<'s>(source: &'s str) -> Result<Vec<InstructionWithDebug<'s>>> {
+    Parser::new(source).parse()
 }
 
 #[cfg(test)]
@@ -365,19 +363,14 @@ pub fn parse<'b, 's>(bump: &'b Bump, source: &'s str) -> Result<Vec<'b, Instruct
 fn parse_test(source: &str, instructions: &[Instruction]) {
     use pretty_assertions::assert_eq;
 
-    let bump = Bump::new();
-
-    assert_eq!(parse(&bump, source).unwrap(), instructions);
+    assert_eq!(parse(source).unwrap(), instructions);
 }
 
 #[test]
 fn parse_line_no_test() {
     use pretty_assertions::assert_eq;
 
-    let bump = Bump::new();
-
     let inst = parse(
-        &bump,
         "
     만약 테스트 { 1 }
     2",

@@ -1,19 +1,19 @@
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Value<'b> {
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Value {
     Int(u32),
-    Str(&'b str),
+    Str(String),
 }
 
-impl<'b> Value<'b> {
+impl Value {
     #[inline]
-    pub fn into_bool(self) -> bool {
+    pub fn into_bool(&self) -> bool {
         self.into()
     }
 
-    pub fn type_name(self) -> &'static str {
+    pub fn type_name(&self) -> &'static str {
         match self {
             Value::Int(..) => "int",
             Value::Str(..) => "str",
@@ -21,7 +21,7 @@ impl<'b> Value<'b> {
     }
 }
 
-impl<'b> Display for Value<'b> {
+impl Display for Value {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         match self {
@@ -31,7 +31,7 @@ impl<'b> Display for Value<'b> {
     }
 }
 
-impl<'b> From<bool> for Value<'b> {
+impl From<bool> for Value {
     #[inline]
     fn from(b: bool) -> Self {
         if b {
@@ -42,34 +42,44 @@ impl<'b> From<bool> for Value<'b> {
     }
 }
 
-impl<'b> From<Value<'b>> for bool {
+impl<'a> From<Value> for bool {
     #[inline]
     fn from(v: Value) -> Self {
         match v {
-            Value::Int(0) | Value::Str("") => false,
-            _ => true,
+            Value::Int(i) => i != 0,
+            Value::Str(s) => !s.is_empty(),
         }
     }
 }
 
-impl<'b> From<u32> for Value<'b> {
+impl<'a> From<&'a Value> for bool {
+    #[inline]
+    fn from(v: &'a Value) -> Self {
+        match v {
+            Value::Int(i) => *i != 0,
+            Value::Str(s) => !s.is_empty(),
+        }
+    }
+}
+
+impl From<u32> for Value {
     #[inline]
     fn from(n: u32) -> Self {
         Value::Int(n)
     }
 }
 
-impl<'b> From<&'b str> for Value<'b> {
+impl From<String> for Value {
     #[inline]
-    fn from(s: &'b str) -> Self {
+    fn from(s: String) -> Self {
         Value::Str(s)
     }
 }
 
-impl<'b> From<&'b mut str> for Value<'b> {
+impl<'a> From<&'a str> for Value {
     #[inline]
-    fn from(s: &'b mut str) -> Self {
-        Value::Str(s)
+    fn from(s: &'a str) -> Self {
+        Value::Str(s.to_string())
     }
 }
 
@@ -77,11 +87,11 @@ impl<'b> From<&'b mut str> for Value<'b> {
 #[derive(Debug)]
 pub struct ValueConvertError(pub &'static str);
 
-impl<'b> TryFrom<Value<'b>> for u32 {
+impl TryFrom<Value> for u32 {
     type Error = ValueConvertError;
 
     #[inline]
-    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
+    fn try_from(v: Value) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n),
             _ => Err(ValueConvertError(v.type_name())),
@@ -89,11 +99,11 @@ impl<'b> TryFrom<Value<'b>> for u32 {
     }
 }
 
-impl<'b> TryFrom<Value<'b>> for usize {
+impl TryFrom<Value> for usize {
     type Error = ValueConvertError;
 
     #[inline]
-    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
+    fn try_from(v: Value) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n as usize),
             _ => Err(ValueConvertError(v.type_name())),
@@ -101,11 +111,11 @@ impl<'b> TryFrom<Value<'b>> for usize {
     }
 }
 
-impl<'b> TryFrom<Value<'b>> for &'b str {
+impl TryFrom<Value> for String {
     type Error = ValueConvertError;
 
     #[inline]
-    fn try_from(v: Value<'b>) -> Result<Self, Self::Error> {
+    fn try_from(v: Value) -> Result<Self, Self::Error> {
         match v {
             Value::Str(s) => Ok(s),
             _ => Err(ValueConvertError(v.type_name())),

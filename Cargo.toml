@@ -17,13 +17,13 @@ unstable = []
 debug = true
 
 [dependencies]
-memchr = "2.3.2"
-bumpalo = { version = "3.4.0", features = ["collections"] }
-ahash = "0.3.6"
-thiserror = "1.0.19"
-async-trait = "0.1.33"
-arrayvec = "0.5.1"
+memchr = "2.3.4"
+ahash = "0.6.1"
+thiserror = "1.0.22"
+async-trait = "0.1.42"
+arrayvec = "0.5.2"
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
-futures = "0.3.4"
+futures = "0.3.8"
