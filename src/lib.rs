@@ -1,9 +1,14 @@
-#![cfg_attr(feature = "unstable", feature(track_caller))]
+use lalrpop_util::lalrpop_mod;
 
-pub mod builtin;
-pub mod context;
+pub mod ast;
+// pub mod builtin;
+// pub mod context;
 pub mod error;
-pub mod instruction;
+lalrpop_mod!(
+    #[allow(unused)]
+    grammar
+);
+// pub mod instruction;
 mod lexer;
 pub mod operator;
 pub mod parser;

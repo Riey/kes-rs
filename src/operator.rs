@@ -1,5 +1,11 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Operator {
+pub enum UnaryOperator {
+    /// !
+    Not,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BinaryOperator {
     /// +
     Add,
     /// -
@@ -17,9 +23,9 @@ pub enum Operator {
     /// ^
     Xor,
 
-    /// =
+    /// ==
     Equal,
-    /// ~=
+    /// !=
     NotEqual,
     /// <
     Less,
@@ -29,6 +35,10 @@ pub enum Operator {
     Greater,
     /// >=
     GreaterOrEqual,
-    /// ~
-    Not,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TernaryOperator {
+    /// ? :
+    Conditional,
 }

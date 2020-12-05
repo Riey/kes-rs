@@ -1,27 +1,30 @@
 use std::fmt::{self, Debug, Formatter};
 use thiserror::Error;
 
+pub type ParseError<'s> = lalrpop_util::ParseError<Location, Token<'s>, LexicalError>;
+pub use crate::{lexer::Location, token::Token};
+
 #[derive(Clone, Error)]
-pub enum ParserError {
-    #[error("코드해석중 {1}번째 줄에서 에러가 발생했습니다 {0}")]
+pub enum LexicalError {
+    #[error("코드해석중 {1}번째 줄에서 에러가 발생했습니다 `{0}`")]
     InvalidCode(&'static str, usize),
-    #[error("잘못된 문자 {0}가 {1}번째 줄에서 발견됐습니다")]
+    #[error("잘못된 문자 `{0}`가 {1}번째 줄에서 발견됐습니다")]
     InvalidChar(char, usize),
-    #[error("예상치 못한 토큰 {0}가 {1}번째 줄에서 발견됐습니다")]
+    #[error("예상치 못한 토큰 `{0}`가 {1}번째 줄에서 발견됐습니다")]
     UnexpectedToken(String, usize),
-    #[error("컴파일중 {0}번째 줄에서 에러가 발생했습니다 {1}")]
+    #[error("컴파일중 {1}번째 줄에서 에러가 발생했습니다 `{0}`")]
     CompileError(String, usize),
     #[error("예상치 못하게 코드가 끝났습니다")]
     UnexpectedEndOfToken,
 }
 
-impl Debug for ParserError {
+impl Debug for LexicalError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-pub type ParserResult<T> = Result<T, ParserError>;
+pub type LexicalResult<T> = Result<T, LexicalError>;
 
 #[derive(Clone, Error)]
 pub enum RuntimeError {

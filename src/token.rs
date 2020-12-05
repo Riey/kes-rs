@@ -1,4 +1,4 @@
-use crate::operator::Operator;
+use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Token<'s> {
@@ -22,8 +22,18 @@ pub enum Token<'s> {
     Builtin(&'s str),
     /// $ABC
     Variable(&'s str),
-    /// +-/*
-    Operator(Operator),
+
+    /// !
+    UnaryOp(UnaryOperator),
+
+    /// &
+    BinaryOp(BinaryOperator),
+
+    /// ?
+    TernaryOpStart(TernaryOperator),
+    /// :
+    TernaryOpEnd(TernaryOperator),
+
     /// {
     OpenBrace,
     /// }
@@ -32,22 +42,16 @@ pub enum Token<'s> {
     OpenParan,
     /// )
     CloseParan,
-    /// :
-    Colon,
-    /// #
-    Sharp,
+
+    /// ~
+    Print,
+
     /// @
-    At,
-    /// \[$<>]
-    Assign(&'s str),
-    /// \[+]
-    Duplicate,
-    /// \[-]
-    Pop,
-    /// \[?]
-    Conditional,
-    /// \[!]
-    PopExternal(u32),
-    /// _
-    Underscore,
+    PrintLine,
+
+    /// #
+    PrintWait,
+
+    /// =
+    Assign,
 }

@@ -1,6 +1,19 @@
-use crate::error::{ParserError, ParserResult as Result};
-use crate::operator::Operator;
+use crate::error::{LexicalError, LexicalResult as Result};
+use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 use crate::token::Token;
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Location {
+    line: usize,
+}
+
+impl Location {
+    pub fn new(line: usize) -> Self {
+        Self { line }
+    }
+}
+
+pub type Spanned<'s> = (Location, Token<'s>, Location);
 
 fn is_ident_char(c: char) -> bool {
     match c {
@@ -57,13 +70,13 @@ impl<'s> Lexer<'s> {
     }
 
     #[inline]
-    fn make_code_err(&self, msg: &'static str) -> ParserError {
-        ParserError::InvalidCode(msg, self.line())
+    fn make_code_err(&self, msg: &'static str) -> LexicalError {
+        LexicalError::InvalidCode(msg, self.line())
     }
 
     #[inline]
-    fn make_char_err(&self, ch: char) -> ParserError {
-        ParserError::InvalidChar(ch, self.line())
+    fn make_char_err(&self, ch: char) -> LexicalError {
+        LexicalError::InvalidChar(ch, self.line())
     }
 
     #[inline]
@@ -88,10 +101,11 @@ impl<'s> Lexer<'s> {
     }
 
     #[inline]
-    unsafe fn try_match_pop_byte(&mut self, match_byte: u8) -> bool {
+    fn try_match_pop_byte(&mut self, match_byte: u8) -> bool {
         match self.text.as_bytes().get(0) {
             Some(b) if *b == match_byte => {
-                self.text = self.text.get_unchecked(1..);
+                debug_assert!(self.text.is_char_boundary(1));
+                self.text = unsafe { self.text.get_unchecked(1..) };
                 true
             }
             _ => false,
@@ -129,76 +143,64 @@ impl<'s> Lexer<'s> {
             Ok(Some(Token::Exit))
         } else if self.try_strip_prefix("반복") {
             Ok(Some(Token::Loop))
-        } else if self.try_strip_prefix("[?]") {
-            Ok(Some(Token::Conditional))
-        } else if self.try_strip_prefix("[-]") {
-            Ok(Some(Token::Pop))
-        } else if self.try_strip_prefix("[+]") {
-            Ok(Some(Token::Duplicate))
-        } else if self.try_strip_prefix("[!") {
-            let pos = memchr::memchr(b']', self.text.as_bytes())
-                .ok_or(self.make_code_err("Assign bracket is not paired"))?;
-            let num = unsafe { self.text.get_unchecked(..pos) };
-            self.text = unsafe { self.text.get_unchecked(pos + 1..) };
-            if num.is_empty() {
-                Ok(Some(Token::PopExternal(0)))
-            } else {
-                num.parse()
-                    .map_err(|_| self.make_code_err("[!]안에는 숫자가 와야합니다"))
-                    .map(|num| Some(Token::PopExternal(num)))
-            }
-        } else if self.try_strip_prefix("[$") {
-            let pos = memchr::memchr(b']', self.text.as_bytes())
-                .ok_or(self.make_code_err("Assign bracket is not paired"))?;
-            let name = unsafe { self.text.get_unchecked(..pos) };
-            self.text = unsafe { self.text.get_unchecked(pos + 1..) };
-            Ok(Some(Token::Assign(name)))
         } else {
             Ok(None)
         }
     }
 
-    fn try_read_operator(&mut self) -> Option<Operator> {
-        unsafe {
-            if self.try_match_pop_byte(b'+') {
-                Some(Operator::Add)
-            } else if self.try_match_pop_byte(b'-') {
-                Some(Operator::Sub)
-            } else if self.try_match_pop_byte(b'*') {
-                Some(Operator::Mul)
-            } else if self.try_match_pop_byte(b'/') {
-                Some(Operator::Div)
-            } else if self.try_match_pop_byte(b'%') {
-                Some(Operator::Rem)
-            } else if self.try_match_pop_byte(b'&') {
-                Some(Operator::And)
-            } else if self.try_match_pop_byte(b'|') {
-                Some(Operator::Or)
-            } else if self.try_match_pop_byte(b'^') {
-                Some(Operator::Xor)
-            } else if self.try_match_pop_byte(b'=') {
-                Some(Operator::Equal)
-            } else if self.try_match_pop_byte(b'>') {
-                if self.try_match_pop_byte(b'=') {
-                    Some(Operator::GreaterOrEqual)
-                } else {
-                    Some(Operator::Greater)
-                }
-            } else if self.try_match_pop_byte(b'<') {
-                if self.try_match_pop_byte(b'=') {
-                    Some(Operator::LessOrEqual)
-                } else {
-                    Some(Operator::Less)
-                }
-            } else if self.try_match_pop_byte(b'~') {
-                if self.try_match_pop_byte(b'=') {
-                    Some(Operator::NotEqual)
-                } else {
-                    Some(Operator::Not)
-                }
+    fn try_read_unary_operator(&mut self) -> Option<UnaryOperator> {
+        if self.try_match_pop_byte(b'!') {
+            Some(UnaryOperator::Not)
+        } else {
+            None
+        }
+    }
+
+    fn try_read_binary_operator(&mut self) -> Option<BinaryOperator> {
+        if self.try_match_pop_byte(b'+') {
+            Some(BinaryOperator::Add)
+        } else if self.try_match_pop_byte(b'-') {
+            Some(BinaryOperator::Sub)
+        } else if self.try_match_pop_byte(b'*') {
+            Some(BinaryOperator::Mul)
+        } else if self.try_match_pop_byte(b'/') {
+            Some(BinaryOperator::Div)
+        } else if self.try_match_pop_byte(b'%') {
+            Some(BinaryOperator::Rem)
+        } else if self.try_match_pop_byte(b'&') {
+            Some(BinaryOperator::And)
+        } else if self.try_match_pop_byte(b'|') {
+            Some(BinaryOperator::Or)
+        } else if self.try_match_pop_byte(b'^') {
+            Some(BinaryOperator::Xor)
+        } else if self.try_match_pop_byte(b'>') {
+            if self.try_match_pop_byte(b'=') {
+                Some(BinaryOperator::GreaterOrEqual)
             } else {
-                None
+                Some(BinaryOperator::Greater)
             }
+        } else if self.try_match_pop_byte(b'<') {
+            if self.try_match_pop_byte(b'=') {
+                Some(BinaryOperator::LessOrEqual)
+            } else {
+                Some(BinaryOperator::Less)
+            }
+        } else if self.try_strip_prefix("==") {
+            Some(BinaryOperator::Equal)
+        } else if self.try_strip_prefix("!=") {
+            Some(BinaryOperator::NotEqual)
+        } else {
+            None
+        }
+    }
+
+    fn try_read_ternary_operator(&mut self) -> Option<(TernaryOperator, bool)> {
+        if self.try_match_pop_byte(b'?') {
+            Some((TernaryOperator::Conditional, true))
+        } else if self.try_match_pop_byte(b':') {
+            Some((TernaryOperator::Conditional, false))
+        } else {
+            None
         }
     }
 
@@ -207,8 +209,24 @@ impl<'s> Lexer<'s> {
             return Ok(token);
         }
 
-        if let Some(op) = self.try_read_operator() {
-            return Ok(Token::Operator(op));
+        if let Some(op) = self.try_read_unary_operator() {
+            return Ok(Token::UnaryOp(op));
+        }
+
+        if let Some(op) = self.try_read_binary_operator() {
+            return Ok(Token::BinaryOp(op));
+        }
+
+        if self.try_match_pop_byte(b'=') {
+            return Ok(Token::Assign);
+        }
+
+        if let Some((op, is_start)) = self.try_read_ternary_operator() {
+            return Ok(if is_start {
+                Token::TernaryOpStart(op)
+            } else {
+                Token::TernaryOpEnd(op)
+            });
         }
 
         if let Some(ident) = self.try_read_ident() {
@@ -216,49 +234,51 @@ impl<'s> Lexer<'s> {
                 return ident.parse().map(Token::IntLit).map_err(|_| {
                     self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")
                 });
-            } else if let [b'_'] = ident.as_bytes() {
-                return Ok(Token::Underscore);
             } else {
                 return Ok(Token::Builtin(ident));
             }
         }
 
-        unsafe {
-            if self.try_match_pop_byte(b'\'') {
-                self.read_str().map(Token::StrLit)
-            } else if self.try_match_pop_byte(b'$') {
-                Ok(Token::Variable(self.read_ident()))
-            } else if self.try_match_pop_byte(b'{') {
-                Ok(Token::OpenBrace)
-            } else if self.try_match_pop_byte(b'}') {
-                Ok(Token::CloseBrace)
-            } else if self.try_match_pop_byte(b'(') {
-                Ok(Token::OpenParan)
-            } else if self.try_match_pop_byte(b')') {
-                Ok(Token::CloseParan)
-            } else if self.try_match_pop_byte(b'#') {
-                Ok(Token::Sharp)
-            } else if self.try_match_pop_byte(b'@') {
-                Ok(Token::At)
-            } else if self.try_match_pop_byte(b':') {
-                Ok(Token::Colon)
-            } else {
-                Err(self.make_char_err(self.text.chars().next().unwrap()))
-            }
+        if self.try_match_pop_byte(b'\'') {
+            self.read_str().map(Token::StrLit)
+        } else if self.try_match_pop_byte(b'$') {
+            Ok(Token::Variable(self.read_ident()))
+        } else if self.try_match_pop_byte(b'{') {
+            Ok(Token::OpenBrace)
+        } else if self.try_match_pop_byte(b'}') {
+            Ok(Token::CloseBrace)
+        } else if self.try_match_pop_byte(b'(') {
+            Ok(Token::OpenParan)
+        } else if self.try_match_pop_byte(b')') {
+            Ok(Token::CloseParan)
+        } else if self.try_match_pop_byte(b'#') {
+            Ok(Token::PrintWait)
+        } else if self.try_match_pop_byte(b'@') {
+            Ok(Token::PrintLine)
+        } else if self.try_match_pop_byte(b'~') {
+            Ok(Token::Print)
+        } else {
+            Err(self.make_char_err(self.text.chars().next().unwrap()))
         }
     }
 }
 
 impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<Token<'s>>;
+    type Item = Result<Spanned<'s>>;
 
-    fn next(&mut self) -> Option<Result<Token<'s>>> {
+    fn next(&mut self) -> Option<Result<Spanned<'s>>> {
         self.skip_ws();
 
         if self.text.is_empty() {
             None
         } else {
-            Some(self.read_next())
+            let start = Location::new(self.line());
+            let token = self.read_next();
+            let end = Location::new(self.line());
+
+            let triple = token.map(|token| (start, token, end));
+
+            Some(triple)
         }
     }
 }
@@ -268,28 +288,32 @@ fn lex_test() {
     use pretty_assertions::assert_eq;
     let mut ts = Lexer::new("'ABC'#");
 
-    assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Sharp,);
+    macro_rules! next {
+        () => {
+            ts.next().unwrap().unwrap().1
+        };
+    }
+
+    assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert_eq!(next!(), Token::PrintWait,);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("[?][-][+][$123]");
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Conditional,);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Pop,);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Duplicate,);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Assign("123"),);
+    ts = Lexer::new("A 'ABC' @");
+    assert_eq!(next!(), Token::Builtin("A"),);
+    assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert_eq!(next!(), Token::PrintLine,);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("_ A 'ABC' @");
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Underscore,);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Builtin("A"),);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::At,);
-    assert!(ts.text.is_empty());
+    ts = Lexer::new(";foo\n A 'ABC' @");
+    assert_eq!(next!(), Token::Builtin("A"),);
+    assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert_eq!(next!(), Token::PrintLine,);
 
-    ts = Lexer::new(";foo\n_ A 'ABC' @");
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Underscore,);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::Builtin("A"),);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::StrLit("ABC"),);
-    assert_eq!(ts.next().unwrap().unwrap(), Token::At,);
+    ts = Lexer::new("$1 = 1 + 2");
+    assert_eq!(next!(), Token::Variable("1"));
+    assert_eq!(next!(), Token::Assign);
+    assert_eq!(next!(), Token::IntLit(1));
+    assert_eq!(next!(), Token::BinaryOp(BinaryOperator::Add));
+    assert_eq!(next!(), Token::IntLit(2));
     assert!(ts.text.is_empty());
 }

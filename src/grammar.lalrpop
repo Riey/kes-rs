@@ -1,0 +1,78 @@
+use crate::token::Token;
+use crate::ast::{Expr, Stmt};
+use crate::operator::BinaryOperator;
+use crate::lexer::Location;
+use crate::error::LexicalError;
+
+grammar<'s>;
+
+pub Program: Vec<Stmt<'s>> = {
+    <stmts: Stmt*> => stmts,
+}
+
+Stmt: Stmt<'s> = {
+    <var:var> "=" <value:Expr> => { Stmt::Assign { var, value } }
+}
+
+Expr: Expr<'s> = { AddExpr }
+
+AddExpr: Expr<'s> = {
+    <lhs:AddExpr> <op:AddOp> <rhs:Term> => Expr::BinaryOp {
+        lhs: Box::new(lhs),
+        rhs: Box::new(rhs),
+        op,
+    },
+    Term,
+}
+
+AddOp: BinaryOperator = {
+    "+" => BinaryOperator::Add,
+    "-" => BinaryOperator::Sub,
+}
+
+Term: Expr<'s> = {
+    <lhs:Term> <op:MulOp> <rhs:Atom> => Expr::BinaryOp {
+        lhs: Box::new(lhs),
+        rhs: Box::new(rhs),
+        op,
+    },
+    Atom,
+}
+
+MulOp: BinaryOperator = {
+    "*" => BinaryOperator::Mul,
+    "/" => BinaryOperator::Div,
+}
+
+Atom: Expr<'s> = {
+    Num,
+    Str,
+}
+
+Num: Expr<'s> = {
+    <value:number> => { Expr::Number(value) }
+}
+
+Str: Expr<'s> = {
+    <value:string> => { Expr::String(value) }
+}
+
+extern {
+    type Location = Location;
+    type Error = LexicalError;
+
+    enum Token<'s> {
+        "만약" => Token::If,
+        "{" => Token::OpenBrace,
+        "}" => Token::CloseBrace,
+        "+" => Token::BinaryOp(BinaryOperator::Add),
+        "-" => Token::BinaryOp(BinaryOperator::Sub),
+        "*" => Token::BinaryOp(BinaryOperator::Mul),
+        "/" => Token::BinaryOp(BinaryOperator::Div),
+        "=" => Token::Assign,
+        number => Token::IntLit(<u32>),
+        string => Token::StrLit(<&'s str>),
+        var => Token::Variable(<&'s str>),
+    }
+} 
+
