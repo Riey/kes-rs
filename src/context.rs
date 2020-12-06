@@ -296,7 +296,7 @@ mod tests {
         let mut builtin = RecordBuiltin::new();
         let ctx = Context::new(&instructions);
 
-        futures::executor::block_on(ctx.run(&mut builtin))?;
+        futures_executor::block_on(ctx.run(&mut builtin))?;
 
         Ok(builtin)
     }
