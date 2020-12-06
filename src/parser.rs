@@ -89,18 +89,28 @@ mod tests {
         )
     }
 
-    // #[test]
-    // fn if_simple() {
-    //     assert_eq!(parse("
-    //     만약 1 + 2 > 2 {
-    //         @ '1은 2보다 크다'
-    //     }
-    //     ").unwrap(), [
-    //         Stmt::If {
-    //             cond: Expr::Number(1).binary_op(Expr::Number(2), op) {
-
-    //             }
-    //         }
-    //     ])
-    // }
+    #[test]
+    fn if_simple() {
+        assert_eq!(
+            parse(
+                "
+        만약 1 + 2 > 2 {
+            @ '1 + 2는 2보다 크다';
+        }
+        "
+            )
+            .unwrap(),
+            [Stmt::If {
+                cond: Expr::Number(1)
+                    .binary_op(Expr::Number(2), BinaryOperator::Add)
+                    .binary_op(Expr::Number(2), BinaryOperator::Greater),
+                then: vec![Stmt::Print {
+                    values: vec![Expr::String("1 + 2는 2보다 크다"),],
+                    newline: true,
+                    wait: false,
+                }],
+                other: vec![],
+            }]
+        )
+    }
 }
