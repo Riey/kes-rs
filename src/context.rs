@@ -2,11 +2,10 @@ use crate::builtin::Builtin;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::instruction::InstructionWithDebug;
+use crate::location::Location;
 use crate::operator::BinaryOperator;
-use crate::value::Value;
-use crate::value::ValueConvertError;
+use crate::value::{Value, ValueConvertError};
 use ahash::AHashMap;
-use arrayvec::ArrayVec;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
@@ -14,7 +13,7 @@ static_assertions::assert_impl_all!(Context: Send, Sync);
 
 pub struct Context<'c> {
     pub instructions: &'c [InstructionWithDebug<'c>],
-    pub stack: Vec<Vec<Value>>,
+    stack: Vec<Value>,
     pub variables: AHashMap<&'c str, Value>,
     cursor: usize,
 }
@@ -30,18 +29,13 @@ impl<'c> Context<'c> {
     }
 
     #[inline]
-    pub fn current_block(&mut self) -> &mut Vec<Value> {
-        self.stack.last_mut().unwrap()
+    fn push(&mut self, v: impl Into<Value>) {
+        self.stack.push(v.into());
     }
 
     #[inline]
-    pub fn push(&mut self, v: impl Into<Value>) {
-        self.current_block().push(v.into());
-    }
-
-    #[inline]
-    pub fn pop(&mut self) -> Option<Value> {
-        self.current_block().pop()
+    fn pop(&mut self) -> Option<Value> {
+        self.stack.pop()
     }
 
     #[inline]
@@ -49,7 +43,7 @@ impl<'c> Context<'c> {
     where
         T::Error: std::fmt::Debug,
     {
-        self.current_block().pop().unwrap().try_into().unwrap()
+        self.stack.pop().unwrap().try_into().unwrap()
     }
 
     #[inline]
@@ -59,13 +53,13 @@ impl<'c> Context<'c> {
         self.pop_ret()?
             .try_into()
             .map_err(|err: ValueConvertError| {
-                RuntimeError::TypeError(err.0, self.current_instruction_line_no())
+                RuntimeError::TypeError(err.0, self.current_instruction_location().line)
             })
     }
 
     #[inline]
     pub fn peek(&mut self) -> Option<&mut Value> {
-        self.current_block().last_mut()
+        self.stack.last_mut()
     }
 
     #[inline]
@@ -144,11 +138,6 @@ impl<'c> Context<'c> {
             BinaryOperator::Xor => {
                 binop_bool!(^);
             }
-            BinaryOperator::Not => {
-                let b = self.pop_ret()?.into_bool();
-
-                self.push(if !b { 1 } else { 0 });
-            }
             BinaryOperator::Add => {
                 let rhs = self.pop_ret()?;
                 let lhs = self.pop_ret()?;
@@ -184,7 +173,7 @@ impl<'c> Context<'c> {
     }
 
     pub fn flush_print<B: Builtin>(&mut self, builtin: &mut B) {
-        for v in self.current_block().drain(..) {
+        for v in self.stack.drain(..) {
             builtin.print(v);
         }
     }
@@ -198,12 +187,12 @@ impl<'c> Context<'c> {
         self.peek().ok_or(err)
     }
 
-    fn current_instruction_line_no(&self) -> usize {
-        self.instructions[self.cursor].line_no
+    fn current_instruction_location(&self) -> Location {
+        self.instructions[self.cursor].location
     }
 
     fn make_err(&self, msg: &'static str) -> RuntimeError {
-        RuntimeError::ExecutionError(msg, self.current_instruction_line_no())
+        RuntimeError::ExecutionError(msg, self.current_instruction_location().line)
     }
 
     pub async fn run_instruction<B: Builtin>(
@@ -236,7 +225,11 @@ impl<'c> Context<'c> {
                     self.push(ret);
                 }
             }
-            Instruction::BinaryOperator(op) => self.run_operator(op)?,
+            Instruction::BinaryOperator(op) => self.run_bin_operator(op)?,
+            Instruction::UnaryOperator(crate::operator::UnaryOperator::Not) => {
+                let v: bool = self.pop_ret()?.into_bool();
+                self.push(!v);
+            }
             Instruction::Goto(pos) => {
                 self.cursor = pos as usize;
                 return Ok(());
@@ -247,23 +240,16 @@ impl<'c> Context<'c> {
                     return Ok(());
                 }
             }
-            Instruction::StartBlock => {
-                self.stack.push(Vec::with_capacity(10));
-            }
-            Instruction::EndBlock => {
-                self.stack.pop();
-            }
-            Instruction::Print => {
+            Instruction::Print { newline, wait } => {
                 self.flush_print(builtin);
-            }
-            Instruction::PrintLine => {
-                self.flush_print(builtin);
-                builtin.new_line();
-            }
-            Instruction::PrintWait => {
-                self.flush_print(builtin);
-                builtin.new_line();
-                builtin.wait().await;
+
+                if newline || wait {
+                    builtin.new_line();
+                }
+
+                if wait {
+                    builtin.wait().await;
+                }
             }
             Instruction::Duplicate => {
                 let item = self.peek_ret()?.clone();
@@ -272,17 +258,6 @@ impl<'c> Context<'c> {
             Instruction::Nop => {}
             Instruction::Pop => {
                 self.pop();
-            }
-            Instruction::PopExternal(num) => {
-                let start = if num == 0 {
-                    0
-                } else {
-                    self.current_block().len() - num as usize
-                };
-
-                let buf: ArrayVec<[_; 20]> = self.current_block().drain(start..).collect();
-                let pos = self.stack.len() - 2;
-                self.stack[pos].extend(buf);
             }
             Instruction::Conditional => {
                 let rhs = self.pop_ret()?;
@@ -308,93 +283,60 @@ impl<'c> Context<'c> {
 }
 
 #[cfg(test)]
-fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
+mod tests {
+    use super::Context;
     use crate::builtin::RecordBuiltin;
-    use crate::parser::parse;
-
-    let instructions = parse(code).unwrap();
-
-    let mut builtin = RecordBuiltin::new();
-    let ctx = Context::new(&instructions);
-
-    futures::executor::block_on(ctx.run(&mut builtin))?;
-
-    Ok(builtin)
-}
-
-#[cfg(test)]
-fn try_test(code: &str, expected: &str) {
+    use crate::compiler::compile_source;
+    use crate::error::{RuntimeError, RuntimeResult};
     use pretty_assertions::assert_eq;
 
-    assert_eq!(test_impl(code).unwrap().text(), expected);
-}
+    fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
+        let instructions = compile_source(code).unwrap();
 
-#[test]
-fn error_line_no() {
-    let err = test_impl(
-        "
-    2 '2' +
-    ; 3번째줄
-    1 '1' - ;4번째줄
+        let mut builtin = RecordBuiltin::new();
+        let ctx = Context::new(&instructions);
+
+        futures::executor::block_on(ctx.run(&mut builtin))?;
+
+        Ok(builtin)
+    }
+
+    #[cfg(test)]
+    fn try_test(code: &str, expected: &str) {
+        assert_eq!(test_impl(code).unwrap().text(), expected);
+    }
+
+    #[test]
+    fn error_line_no() {
+        let err = test_impl(
+            "
+    2 + '2';
+    # 3번째줄
+    1 - '1'; #4번째줄
     ",
-    )
-    .err()
-    .unwrap();
+        )
+        .err()
+        .unwrap();
 
-    match err {
-        RuntimeError::TypeError("str", 4) => {}
-        _ => panic!("unexpected error"),
+        match err {
+            RuntimeError::TypeError("str", 4) => {}
+            _ => panic!("unexpected error"),
+        }
     }
-}
 
-#[test]
-fn pop_external_test() {
-    try_test(
-        "
-만약 1 2 ~= {
-    2 3 [!]
-    4 5 [!1] #
-}
-@
-",
-        "4@#235@",
-    );
-}
-
-#[test]
-fn str_select_test() {
-    try_test(
-        "
-선택 '2' {
-    '1' {
-        3:
+    #[test]
+    fn if_test() {
+        try_test(
+            "만약 !1 { @'2'; } 그외 { @'3'; } 만약 0 { @'4'; } 그외 { @'5'; }",
+            "3@5@",
+        );
     }
-    '2' {
-        4:
+
+    #[test]
+    fn loop_test() {
+        try_test(
+            "$0 = 1; 반복 $0 < 10 { @@$0; $0 = $0 + 1; } @@$0;",
+            "12345678910",
+        );
     }
-    _ {
-        5:
-    }
-}
-",
-        "4",
-    );
-}
-
-#[test]
-fn if_test() {
-    try_test(
-        "만약 1 ~ { '2'@ } 그외 { '3'@ } 만약 0 { '3'@ } 그외 {  '4'@ }",
-        "3@4@",
-    );
-}
-
-#[test]
-fn loop_test() {
-    try_test("1 [$0] 반복 $0 10 < { $0: $0 1 + [$0] } $0:", "12345678910");
-}
-
-#[test]
-fn complex_test() {
-    try_test("1 2 + [$0] 만약 $0 3 = { 선택 $0 { 1 { 2: } 3 { '?': } _ { '1': } } } 그외 { 만약 3 { 4: } 만약 '1' { 1: } } $0:", "?3");
 }

@@ -1,6 +1,6 @@
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Location {
-    line: usize,
+    pub line: usize,
 }
 
 impl Location {

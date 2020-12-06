@@ -1,9 +1,9 @@
 use lalrpop_util::lalrpop_mod;
 
 pub mod ast;
-// pub mod builtin;
+pub mod builtin;
 pub mod compiler;
-// pub mod context;
+pub mod context;
 pub mod error;
 lalrpop_mod!(
     #[allow(unused)]

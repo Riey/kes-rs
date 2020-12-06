@@ -1,4 +1,3 @@
-use crate::error::RuntimeError;
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 
@@ -84,38 +83,42 @@ impl<'a> From<&'a str> for Value {
     }
 }
 
+/// Contains actual type name
+#[derive(Debug)]
+pub struct ValueConvertError(pub &'static str);
+
 impl TryFrom<Value> for u32 {
-    type Error = RuntimeError;
+    type Error = ValueConvertError;
 
     #[inline]
     fn try_from(v: Value) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n),
-            _ => Err(RuntimeError::TypeError(v.type_name())),
+            _ => Err(ValueConvertError(v.type_name())),
         }
     }
 }
 
 impl TryFrom<Value> for usize {
-    type Error = RuntimeError;
+    type Error = ValueConvertError;
 
     #[inline]
     fn try_from(v: Value) -> Result<Self, Self::Error> {
         match v {
             Value::Int(n) => Ok(n as usize),
-            _ => Err(RuntimeError::TypeError(v.type_name())),
+            _ => Err(ValueConvertError(v.type_name())),
         }
     }
 }
 
 impl TryFrom<Value> for String {
-    type Error = RuntimeError;
+    type Error = ValueConvertError;
 
     #[inline]
     fn try_from(v: Value) -> Result<Self, Self::Error> {
         match v {
             Value::Str(s) => Ok(s),
-            _ => Err(RuntimeError::TypeError(v.type_name())),
+            _ => Err(ValueConvertError(v.type_name())),
         }
     }
 }

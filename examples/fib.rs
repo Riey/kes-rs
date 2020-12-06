@@ -1,7 +1,7 @@
 use kes::async_trait;
 use kes::builtin::Builtin;
+use kes::compiler::compile_source;
 use kes::context::Context;
-use kes::parser::parse;
 use kes::value::Value;
 
 pub struct StdioBuiltin;
@@ -32,7 +32,7 @@ impl Builtin for StdioBuiltin {
 }
 
 fn main() {
-    let script = parse(include_str!("fib.kes")).unwrap();
+    let script = compile_source(include_str!("fib.kes")).unwrap();
 
     let ctx = Context::new(&script);
 
