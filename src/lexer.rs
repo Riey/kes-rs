@@ -214,11 +214,7 @@ impl<'s> Lexer<'s> {
         }
 
         if let Some((op, is_start)) = self.try_read_ternary_operator() {
-            return Ok(if is_start {
-                Token::TernaryOpStart(op)
-            } else {
-                Token::TernaryOpEnd(op)
-            });
+            return Ok(Token::TernaryOp(op, is_start));
         }
 
         if let Some(ident) = self.try_read_ident() {

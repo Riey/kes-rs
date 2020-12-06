@@ -1,5 +1,5 @@
-use crate::location::Location;
 use crate::operator::{BinaryOperator, UnaryOperator};
+use crate::{location::Location, operator::TernaryOperator};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Stmt<'s> {
@@ -46,6 +46,13 @@ pub enum Expr<'s> {
         rhs: Box<Expr<'s>>,
         op: BinaryOperator,
     },
+
+    TernaryOp {
+        lhs: Box<Expr<'s>>,
+        mhs: Box<Expr<'s>>,
+        rhs: Box<Expr<'s>>,
+        op: TernaryOperator,
+    },
 }
 
 impl<'s> Expr<'s> {
@@ -59,6 +66,15 @@ impl<'s> Expr<'s> {
     pub fn binary_op(self, rhs: Self, op: BinaryOperator) -> Self {
         Expr::BinaryOp {
             lhs: Box::new(self),
+            rhs: Box::new(rhs),
+            op,
+        }
+    }
+
+    pub fn ternary_op(self, mhs: Self, rhs: Self, op: TernaryOperator) -> Self {
+        Expr::TernaryOp {
+            lhs: Box::new(self),
+            mhs: Box::new(mhs),
             rhs: Box::new(rhs),
             op,
         }

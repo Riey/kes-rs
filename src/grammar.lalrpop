@@ -1,6 +1,6 @@
 use crate::token::Token;
 use crate::ast::{Expr, Stmt};
-use crate::operator::{UnaryOperator, BinaryOperator};
+use crate::operator::{UnaryOperator, BinaryOperator, TernaryOperator};
 use crate::location::Location;
 use crate::error::LexicalError;
 
@@ -53,7 +53,12 @@ ExprWithComma: Expr<'s> = {
 }
 
 Expr: Expr<'s> = {
-    <lhs:Expr> <op:BoolOp> <rhs:ArithmeticExpr> => lhs.binary_op(rhs, op),
+    <lhs:Expr> "?" <mhs:BoolExpr> ":" <rhs:BoolExpr> => lhs.ternary_op(mhs, rhs, TernaryOperator::Conditional),
+    BoolExpr,
+}
+
+BoolExpr: Expr<'s> = {
+    <lhs:BoolExpr> <op:BoolOp> <rhs:ArithmeticExpr> => lhs.binary_op(rhs, op),
     ArithmeticExpr,
 }
 
@@ -132,6 +137,9 @@ extern {
         "<=" => Token::BinaryOp(BinaryOperator::LessOrEqual),
         "!=" => Token::BinaryOp(BinaryOperator::NotEqual),
         "==" => Token::BinaryOp(BinaryOperator::Equal),
+
+        "?" => Token::TernaryOp(TernaryOperator::Conditional, true),
+        ":" => Token::TernaryOp(TernaryOperator::Conditional, false),
 
         "!" => Token::UnaryOp(UnaryOperator::Not),
         "=" => Token::Assign,

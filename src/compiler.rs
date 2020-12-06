@@ -1,10 +1,10 @@
-use arrayvec::ArrayVec;
 use crate::location::Location;
 use crate::{ast::Expr, ast::Stmt};
 use crate::{
     error::ParseError,
     instruction::{Instruction, InstructionWithDebug},
 };
+use arrayvec::ArrayVec;
 
 pub struct Compiler<'s> {
     out: Vec<InstructionWithDebug<'s>>,
@@ -80,7 +80,8 @@ impl<'s> Compiler<'s> {
                     let first = idx == 0;
 
                     if !first {
-                        self.out[mark as usize].inst = Instruction::GotoIfNot(self.next_pos() as u32);
+                        self.out[mark as usize].inst =
+                            Instruction::GotoIfNot(self.next_pos() as u32);
                     }
 
                     self.push_expr(cond);
@@ -132,6 +133,7 @@ impl<'s> Compiler<'s> {
                 self.push_expr(rhs);
                 self.push(Instruction::BinaryOperator(*op));
             }
+            Expr::TernaryOp { .. } => todo!(),
         }
     }
 

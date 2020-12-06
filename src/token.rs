@@ -29,10 +29,8 @@ pub enum Token<'s> {
     /// &
     BinaryOp(BinaryOperator),
 
-    /// ?
-    TernaryOpStart(TernaryOperator),
-    /// :
-    TernaryOpEnd(TernaryOperator),
+    /// ? :
+    TernaryOp(TernaryOperator, bool),
 
     /// {
     OpenBrace,

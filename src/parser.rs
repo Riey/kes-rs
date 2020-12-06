@@ -14,6 +14,7 @@ mod tests {
         ast::{Expr, Stmt},
         location::Location,
         operator::BinaryOperator,
+        operator::TernaryOperator,
     };
     use pretty_assertions::assert_eq;
 
@@ -91,6 +92,23 @@ mod tests {
             parse("1 > 2;").unwrap(),
             [Stmt::Expression {
                 expr: Expr::Number(1).binary_op(Expr::Number(2), BinaryOperator::Greater),
+                location: Location::new(1),
+            }]
+        )
+    }
+
+    #[test]
+    fn tern() {
+        assert_eq!(
+            parse("1 > 2 ? 2 : 1;").unwrap(),
+            [Stmt::Expression {
+                expr: Expr::Number(1)
+                    .binary_op(Expr::Number(2), BinaryOperator::Greater)
+                    .ternary_op(
+                        Expr::Number(2),
+                        Expr::Number(1),
+                        TernaryOperator::Conditional
+                    ),
                 location: Location::new(1),
             }]
         )

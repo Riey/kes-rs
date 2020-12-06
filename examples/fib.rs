@@ -36,5 +36,5 @@ fn main() {
 
     let ctx = Context::new(&script);
 
-    futures::executor::block_on(ctx.run(StdioBuiltin)).unwrap();
+    futures_executor::block_on(ctx.run(StdioBuiltin)).unwrap();
 }
