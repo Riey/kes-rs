@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use crate::location::Location;
 use crate::{ast::Expr, ast::Stmt};
 use crate::{
@@ -25,11 +26,11 @@ impl<'s> Compiler<'s> {
         });
     }
 
-    fn next_pos(&self) -> usize {
-        self.out.len()
+    fn next_pos(&self) -> u32 {
+        self.out.len() as u32
     }
 
-    fn mark_pos(&mut self) -> usize {
+    fn mark_pos(&mut self) -> u32 {
         let next = self.next_pos();
         self.push(Instruction::Nop);
         next
@@ -73,13 +74,13 @@ impl<'s> Compiler<'s> {
             } => {
                 self.location = *location;
                 let mut mark = 0;
-                let mut else_mark = Vec::with_capacity(arms.len());
+                let mut else_mark = ArrayVec::<[_; 20]>::new();
 
                 for (idx, (cond, body)) in arms.iter().enumerate() {
                     let first = idx == 0;
 
                     if !first {
-                        self.out[mark].inst = Instruction::GotoIfNot(self.next_pos() as u32);
+                        self.out[mark as usize].inst = Instruction::GotoIfNot(self.next_pos() as u32);
                     }
 
                     self.push_expr(cond);
@@ -91,13 +92,13 @@ impl<'s> Compiler<'s> {
                 }
 
                 if !arms.is_empty() {
-                    self.out[mark].inst = Instruction::GotoIfNot(self.next_pos() as u32);
+                    self.out[mark as usize].inst = Instruction::GotoIfNot(self.next_pos() as u32);
                 }
 
                 self.compile_body(other);
 
                 for mark in else_mark {
-                    self.out[mark].inst = Instruction::Goto(self.next_pos() as u32);
+                    self.out[mark as usize].inst = Instruction::Goto(self.next_pos() as u32);
                 }
             }
             Stmt::While {
@@ -112,7 +113,7 @@ impl<'s> Compiler<'s> {
 
                 self.compile_body(body);
                 self.push(Instruction::Goto(first as u32));
-                self.out[end].inst = Instruction::GotoIfNot(self.next_pos() as u32);
+                self.out[end as usize].inst = Instruction::GotoIfNot(self.next_pos() as u32);
             }
         }
     }
