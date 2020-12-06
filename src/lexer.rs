@@ -144,7 +144,7 @@ impl<'s> Lexer<'s> {
         } else if self.try_strip_prefix("종료") {
             Ok(Some(Token::Exit))
         } else if self.try_strip_prefix("반복") {
-            Ok(Some(Token::Loop))
+            Ok(Some(Token::While))
         } else {
             Ok(None)
         }

@@ -26,6 +26,7 @@ Stmt: Stmt<'s> = {
             other: elsestmt.unwrap_or_default(),
         }
     },
+    "반복" <cond:Expr> "{" <body:Body> "}" => Stmt::While { cond, body },
     <Expr> ";" => Stmt::Expression(<>),
     <Stmt> ";" => <>,
 }
@@ -104,6 +105,7 @@ extern {
         "만약" => Token::If,
         "혹은" => Token::ElseIf,
         "그외" => Token::Else,
+        "반복" => Token::While,
         "PRINT" => Token::Print,
         "PRINTL" => Token::PrintLine,
         "PRINTW" => Token::PrintWait,

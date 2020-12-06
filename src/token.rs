@@ -13,7 +13,7 @@ pub enum Token<'s> {
     /// 종료
     Exit,
     /// 반복
-    Loop,
+    While,
     /// ''
     StrLit(&'s str),
     /// 123

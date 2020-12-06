@@ -162,4 +162,19 @@ mod tests {
             }]
         )
     }
+
+    #[test]
+    fn loop_test() {
+        assert_eq!(
+            parse("반복 2 > 1 { @123; }").unwrap(),
+            [Stmt::While {
+                cond: Expr::Number(2).binary_op(Expr::Number(1), BinaryOperator::Greater),
+                body: vec![Stmt::Print {
+                    values: vec![Expr::Number(123)],
+                    newline: true,
+                    wait: false
+                },],
+            }]
+        );
+    }
 }

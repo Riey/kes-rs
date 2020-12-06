@@ -15,6 +15,10 @@ pub enum Stmt<'s> {
         arms: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
         other: Vec<Stmt<'s>>,
     },
+    While {
+        cond: Expr<'s>,
+        body: Vec<Stmt<'s>>,
+    },
     Expression(Expr<'s>),
 }
 
