@@ -76,7 +76,15 @@ impl<'s> Compiler<'s> {
                     self.out[mark] = Instruction::Goto(self.next_pos() as u32);
                 }
             }
-            Stmt::While { .. } => todo!(),
+            Stmt::While { cond, body } => {
+                let first = self.next_pos();
+                self.push_expr(cond);
+                let end = self.mark_pos();
+
+                self.compile_body(body);
+                self.push(Instruction::Goto(first as u32));
+                self.out[end] = Instruction::GotoIfNot(self.next_pos() as u32);
+            }
         }
     }
 
@@ -172,5 +180,23 @@ mod tests {
                 Instruction::Pop,
             ]
         );
+    }
+
+    #[test]
+    fn while_simple() {
+        assert_eq!(
+            compile_source("반복 1 + 2 { 2; } 3;").unwrap(),
+            &[
+                Instruction::LoadInt(1),
+                Instruction::LoadInt(2),
+                Instruction::BinaryOperator(BinaryOperator::Add),
+                Instruction::GotoIfNot(7),
+                Instruction::LoadInt(2),
+                Instruction::Pop,
+                Instruction::Goto(0),
+                Instruction::LoadInt(3),
+                Instruction::Pop,
+            ]
+        )
     }
 }
