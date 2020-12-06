@@ -78,4 +78,29 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn compare() {
+        assert_eq!(
+            parse("1 > 2;").unwrap(),
+            [Stmt::Expression(
+                Expr::Number(1).binary_op(Expr::Number(2), BinaryOperator::Greater)
+            )]
+        )
+    }
+
+    // #[test]
+    // fn if_simple() {
+    //     assert_eq!(parse("
+    //     만약 1 + 2 > 2 {
+    //         @ '1은 2보다 크다'
+    //     }
+    //     ").unwrap(), [
+    //         Stmt::If {
+    //             cond: Expr::Number(1).binary_op(Expr::Number(2), op) {
+
+    //             }
+    //         }
+    //     ])
+    // }
 }

@@ -7,13 +7,25 @@ use crate::error::LexicalError;
 grammar<'s>;
 
 pub Program: Vec<Stmt<'s>> = {
+    Body,
+};
+
+Body: Vec<Stmt<'s>> = {
     <stmts: Stmt*> => stmts,
 }
 
 Stmt: Stmt<'s> = {
+    <var:var> "=" <value:Expr> ";" => { Stmt::Assign { var, value } },
     "PRINT" <values:Expr*> ";" => { Stmt::Print { values, newline: false, wait: false }},
     "PRINTL" <values:Expr*> ";" => { Stmt::Print { values, newline: true, wait: false }},
-    <var:var> "=" <value:Expr> ";" => { Stmt::Assign { var, value } },
+    "만약" <cond:Expr> "{" <body:Body> "}" => { 
+        Stmt::If {
+            cond,
+            then: body,
+            other: Vec::new(),
+        }
+    },
+    <Expr> ";" => Stmt::Expression(<>),
     <Stmt> ";" => <>,
 }
 
@@ -30,11 +42,17 @@ ExprWithComma: Expr<'s> = {
 }
 
 Expr: Expr<'s> = {
-    <lhs:Expr> <op:AddOp> <rhs:Factor> => Expr::BinaryOp {
-        lhs: Box::new(lhs),
-        rhs: Box::new(rhs),
-        op,
-    },
+    <lhs:Expr> <op:BoolOp> <rhs:ArithmeticExpr> => lhs.binary_op(rhs, op),
+    ArithmeticExpr,
+}
+
+BoolOp: BinaryOperator = {
+    ">" => BinaryOperator::Greater,
+    ">=" => BinaryOperator::GreaterOrEqual,
+}
+
+ArithmeticExpr: Expr<'s> = {
+    <lhs:ArithmeticExpr> <op:AddOp> <rhs:Factor> => lhs.binary_op(rhs, op),
     Factor,
 }
 
@@ -44,11 +62,7 @@ AddOp: BinaryOperator = {
 }
 
 Factor: Expr<'s> = {
-    <lhs:Factor> <op:MulOp> <rhs:Term> => Expr::BinaryOp {
-        lhs: Box::new(lhs),
-        rhs: Box::new(rhs),
-        op,
-    },
+    <lhs:Factor> <op:MulOp> <rhs:Term> => lhs.binary_op(rhs, op),
     Term,
 }
 
@@ -58,9 +72,10 @@ MulOp: BinaryOperator = {
 }
 
 Term: Expr<'s> = {
-    <value:number> => { Expr::Number(value) },
-    <value:string> => { Expr::String(value) },
-    <var:var> => { Expr::Variable(var) },
+    <value:number> => Expr::Number(value),
+    <value:string> => Expr::String(value),
+    <var:var> => Expr::Variable(var),
+    "!" <Term> => <>.unary_op(UnaryOperator::Not),
     "(" <Expr> ")",
 }
 
@@ -82,6 +97,8 @@ extern {
         "*" => Token::BinaryOp(BinaryOperator::Mul),
         "/" => Token::BinaryOp(BinaryOperator::Div),
         "%" => Token::BinaryOp(BinaryOperator::Rem),
+        ">" => Token::BinaryOp(BinaryOperator::Greater),
+        ">=" => Token::BinaryOp(BinaryOperator::GreaterOrEqual),
         "!" => Token::UnaryOp(UnaryOperator::Not),
         "=" => Token::Assign,
         ";" => Token::SemiColon,

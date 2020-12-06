@@ -19,7 +19,7 @@ pub fn parse_short(b: &mut Bencher) {
 
 #[bench]
 pub fn parse_long(b: &mut Bencher) {
-    let input = "만약 1 2 + [$1] $1 { 123 } 그외 { 선택 $1 { 2 { } _ { } } }".repeat(100);
+    let input = "만약 1 + 2 == $1 { 123 } 그외 { 선택 $1 { 2 { } _ { } } }".repeat(100);
     b.bytes += input.len() as u64;
 
     b.iter(|| {

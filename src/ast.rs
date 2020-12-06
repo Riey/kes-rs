@@ -1,4 +1,4 @@
-use crate::operator::BinaryOperator;
+use crate::operator::{BinaryOperator, UnaryOperator};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Stmt<'s> {
@@ -11,6 +11,12 @@ pub enum Stmt<'s> {
         newline: bool,
         wait: bool,
     },
+    If {
+        cond: Expr<'s>,
+        then: Vec<Stmt<'s>>,
+        other: Vec<Stmt<'s>>,
+    },
+    Expression(Expr<'s>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,9 +25,31 @@ pub enum Expr<'s> {
     String(&'s str),
     Variable(&'s str),
 
+    UnaryOp {
+        value: Box<Expr<'s>>,
+        op: UnaryOperator,
+    },
+
     BinaryOp {
         lhs: Box<Expr<'s>>,
         rhs: Box<Expr<'s>>,
         op: BinaryOperator,
     },
+}
+
+impl<'s> Expr<'s> {
+    pub fn unary_op(self, op: UnaryOperator) -> Self {
+        Expr::UnaryOp {
+            value: Box::new(self),
+            op,
+        }
+    }
+
+    pub fn binary_op(self, rhs: Self, op: BinaryOperator) -> Self {
+        Expr::BinaryOp {
+            lhs: Box::new(self),
+            rhs: Box::new(rhs),
+            op,
+        }
+    }
 }
