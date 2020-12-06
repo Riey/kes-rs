@@ -101,15 +101,64 @@ mod tests {
             )
             .unwrap(),
             [Stmt::If {
-                cond: Expr::Number(1)
-                    .binary_op(Expr::Number(2), BinaryOperator::Add)
-                    .binary_op(Expr::Number(2), BinaryOperator::Greater),
-                then: vec![Stmt::Print {
-                    values: vec![Expr::String("1 + 2는 2보다 크다"),],
+                arms: vec![(
+                    Expr::Number(1)
+                        .binary_op(Expr::Number(2), BinaryOperator::Add)
+                        .binary_op(Expr::Number(2), BinaryOperator::Greater),
+                    vec![Stmt::Print {
+                        values: vec![Expr::String("1 + 2는 2보다 크다"),],
+                        newline: true,
+                        wait: false,
+                    }]
+                )],
+                other: vec![],
+            }]
+        )
+    }
+
+    #[test]
+    fn if_else_simple() {
+        assert_eq!(
+            parse(
+                "
+        만약 1 + 2 > 2 {
+            @ '1 + 2는 2보다 크다';
+        } 혹은 1 + 2 == 2 {
+            @ '1 + 2는 2다';
+        } 그외 {
+            @ '1 + 2는 2보다 작다';
+        }
+        "
+            )
+            .unwrap(),
+            [Stmt::If {
+                arms: vec![
+                    (
+                        Expr::Number(1)
+                            .binary_op(Expr::Number(2), BinaryOperator::Add)
+                            .binary_op(Expr::Number(2), BinaryOperator::Greater),
+                        vec![Stmt::Print {
+                            values: vec![Expr::String("1 + 2는 2보다 크다"),],
+                            newline: true,
+                            wait: false,
+                        }]
+                    ),
+                    (
+                        Expr::Number(1)
+                            .binary_op(Expr::Number(2), BinaryOperator::Add)
+                            .binary_op(Expr::Number(2), BinaryOperator::Equal),
+                        vec![Stmt::Print {
+                            values: vec![Expr::String("1 + 2는 2다"),],
+                            newline: true,
+                            wait: false,
+                        }]
+                    ),
+                ],
+                other: vec![Stmt::Print {
+                    values: vec![Expr::String("1 + 2는 2보다 작다"),],
                     newline: true,
                     wait: false,
                 }],
-                other: vec![],
             }]
         )
     }

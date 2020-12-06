@@ -12,8 +12,7 @@ pub enum Stmt<'s> {
         wait: bool,
     },
     If {
-        cond: Expr<'s>,
-        then: Vec<Stmt<'s>>,
+        arms: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
         other: Vec<Stmt<'s>>,
     },
     Expression(Expr<'s>),
