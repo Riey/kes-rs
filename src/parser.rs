@@ -12,6 +12,7 @@ mod tests {
     use super::parse;
     use crate::{
         ast::{Expr, Stmt},
+        location::Location,
         operator::BinaryOperator,
     };
     use pretty_assertions::assert_eq;
@@ -30,7 +31,8 @@ mod tests {
                         op: BinaryOperator::Mul,
                     }),
                     op: BinaryOperator::Add,
-                }
+                },
+                location: Location::new(1),
             }]
         );
     }
@@ -42,7 +44,8 @@ mod tests {
             [Stmt::Print {
                 values: vec![Expr::String("123"), Expr::Number(123)],
                 newline: true,
-                wait: false
+                wait: false,
+                location: Location::new(1),
             }]
         )
     }
@@ -61,11 +64,13 @@ mod tests {
             [
                 Stmt::Assign {
                     var: "1",
-                    value: Expr::Number(1)
+                    value: Expr::Number(1),
+                    location: Location::new(2),
                 },
                 Stmt::Assign {
                     var: "2",
-                    value: Expr::Number(2)
+                    value: Expr::Number(2),
+                    location: Location::new(3),
                 },
                 Stmt::Assign {
                     var: "3",
@@ -73,7 +78,8 @@ mod tests {
                         lhs: Box::new(Expr::Variable("1")),
                         rhs: Box::new(Expr::Variable("2")),
                         op: BinaryOperator::Add,
-                    }
+                    },
+                    location: Location::new(4),
                 },
             ]
         );
@@ -83,9 +89,10 @@ mod tests {
     fn compare() {
         assert_eq!(
             parse("1 > 2;").unwrap(),
-            [Stmt::Expression(
-                Expr::Number(1).binary_op(Expr::Number(2), BinaryOperator::Greater)
-            )]
+            [Stmt::Expression {
+                expr: Expr::Number(1).binary_op(Expr::Number(2), BinaryOperator::Greater),
+                location: Location::new(1),
+            }]
         )
     }
 
@@ -109,9 +116,11 @@ mod tests {
                         values: vec![Expr::String("1 + 2는 2보다 크다"),],
                         newline: true,
                         wait: false,
+                        location: Location::new(3)
                     }]
                 )],
                 other: vec![],
+                location: Location::new(2),
             }]
         )
     }
@@ -141,6 +150,7 @@ mod tests {
                             values: vec![Expr::String("1 + 2는 2보다 크다"),],
                             newline: true,
                             wait: false,
+                            location: Location::new(3),
                         }]
                     ),
                     (
@@ -151,6 +161,7 @@ mod tests {
                             values: vec![Expr::String("1 + 2는 2다"),],
                             newline: true,
                             wait: false,
+                            location: Location::new(5),
                         }]
                     ),
                 ],
@@ -158,7 +169,9 @@ mod tests {
                     values: vec![Expr::String("1 + 2는 2보다 작다"),],
                     newline: true,
                     wait: false,
+                    location: Location::new(7),
                 }],
+                location: Location::new(2),
             }]
         )
     }
@@ -172,8 +185,10 @@ mod tests {
                 body: vec![Stmt::Print {
                     values: vec![Expr::Number(123)],
                     newline: true,
-                    wait: false
+                    wait: false,
+                    location: Location::new(1),
                 },],
+                location: Location::new(1),
             }]
         );
     }

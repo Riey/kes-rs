@@ -1,3 +1,4 @@
+use crate::location::Location;
 use crate::operator::{BinaryOperator, UnaryOperator};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -5,21 +6,28 @@ pub enum Stmt<'s> {
     Assign {
         var: &'s str,
         value: Expr<'s>,
+        location: Location,
     },
     Print {
         values: Vec<Expr<'s>>,
         newline: bool,
         wait: bool,
+        location: Location,
     },
     If {
         arms: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
         other: Vec<Stmt<'s>>,
+        location: Location,
     },
     While {
         cond: Expr<'s>,
         body: Vec<Stmt<'s>>,
+        location: Location,
     },
-    Expression(Expr<'s>),
+    Expression {
+        expr: Expr<'s>,
+        location: Location,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

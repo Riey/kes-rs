@@ -1,7 +1,7 @@
 use crate::token::Token;
 use crate::ast::{Expr, Stmt};
 use crate::operator::{UnaryOperator, BinaryOperator};
-use crate::lexer::Location;
+use crate::location::Location;
 use crate::error::LexicalError;
 
 grammar<'s>;
@@ -15,19 +15,20 @@ Body: Vec<Stmt<'s>> = {
 }
 
 Stmt: Stmt<'s> = {
-    <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value },
-    "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false },
-    "PRINTL" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: false },
-    "만약" <cond:Expr> "{" <body:Body> "}" <elseifstmts:ElseIfStmt*> <elsestmt:ElseStmt?> => { 
+    <location:@L> <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value, location },
+    <location:@L> "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false, location },
+    <location:@L> "PRINTL" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: false, location },
+    <location:@L> "만약" <cond:Expr> "{" <body:Body> "}" <elseifstmts:ElseIfStmt*> <elsestmt:ElseStmt?> => { 
         let mut arms = elseifstmts;
         arms.insert(0, (cond, body));
         Stmt::If {
             arms,
             other: elsestmt.unwrap_or_default(),
+            location,
         }
     },
-    "반복" <cond:Expr> "{" <body:Body> "}" => Stmt::While { cond, body },
-    <Expr> ";" => Stmt::Expression(<>),
+    <location:@L> "반복" <cond:Expr> "{" <body:Body> "}" => Stmt::While { cond, body, location },
+    <location:@L> <expr:Expr> ";" => Stmt::Expression { expr, location },
     <Stmt> ";" => <>,
 }
 

@@ -11,6 +11,7 @@ lalrpop_mod!(
 );
 pub mod instruction;
 mod lexer;
+pub mod location;
 pub mod operator;
 pub mod parser;
 pub mod token;

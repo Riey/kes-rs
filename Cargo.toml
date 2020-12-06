@@ -10,9 +10,6 @@ homepage = "https://github.com/Riey/kes-rs"
 repository = "https://github.com/Riey/kes-rs"
 readme = "README.md"
 
-[features]
-unstable = []
-
 [profile.release]
 debug = true
 

@@ -1,17 +1,7 @@
 use crate::error::{LexicalError, LexicalResult as Result};
+use crate::location::Location;
 use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 use crate::token::Token;
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct Location {
-    line: usize,
-}
-
-impl Location {
-    pub fn new(line: usize) -> Self {
-        Self { line }
-    }
-}
 
 pub type Spanned<'s> = (Location, Token<'s>, Location);
 

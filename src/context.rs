@@ -2,7 +2,7 @@ use crate::builtin::Builtin;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::instruction::InstructionWithDebug;
-use crate::operator::Operator;
+use crate::operator::BinaryOperator;
 use crate::value::Value;
 use crate::value::ValueConvertError;
 use ahash::AHashMap;
@@ -83,7 +83,7 @@ impl<'c> Context<'c> {
         self.pop_into()
     }
 
-    pub fn run_operator(&mut self, op: Operator) -> RuntimeResult<()> {
+    pub fn run_bin_operator(&mut self, op: BinaryOperator) -> RuntimeResult<()> {
         macro_rules! binop {
             ($op:tt) => {
                 let rhs: u32 = self.pop_into_ret()?;
@@ -117,39 +117,39 @@ impl<'c> Context<'c> {
         }
 
         match op {
-            Operator::Equal => {
+            BinaryOperator::Equal => {
                 binop_raw_bool!(==);
             }
-            Operator::NotEqual => {
+            BinaryOperator::NotEqual => {
                 binop_raw_bool!(!=);
             }
-            Operator::Greater => {
+            BinaryOperator::Greater => {
                 binop_raw_bool!(>);
             }
-            Operator::Less => {
+            BinaryOperator::Less => {
                 binop_raw_bool!(<);
             }
-            Operator::GreaterOrEqual => {
+            BinaryOperator::GreaterOrEqual => {
                 binop_raw_bool!(>=);
             }
-            Operator::LessOrEqual => {
+            BinaryOperator::LessOrEqual => {
                 binop_raw_bool!(<=);
             }
-            Operator::And => {
+            BinaryOperator::And => {
                 binop_bool!(&);
             }
-            Operator::Or => {
+            BinaryOperator::Or => {
                 binop_bool!(|);
             }
-            Operator::Xor => {
+            BinaryOperator::Xor => {
                 binop_bool!(^);
             }
-            Operator::Not => {
+            BinaryOperator::Not => {
                 let b = self.pop_ret()?.into_bool();
 
                 self.push(if !b { 1 } else { 0 });
             }
-            Operator::Add => {
+            BinaryOperator::Add => {
                 let rhs = self.pop_ret()?;
                 let lhs = self.pop_ret()?;
 
@@ -166,16 +166,16 @@ impl<'c> Context<'c> {
                     (Value::Str(l), Value::Str(r)) => Value::Str(l + &r),
                 });
             }
-            Operator::Sub => {
+            BinaryOperator::Sub => {
                 binop!(-);
             }
-            Operator::Mul => {
+            BinaryOperator::Mul => {
                 binop!(*);
             }
-            Operator::Div => {
+            BinaryOperator::Div => {
                 binop!(/);
             }
-            Operator::Rem => {
+            BinaryOperator::Rem => {
                 binop!(%);
             }
         }
@@ -236,7 +236,7 @@ impl<'c> Context<'c> {
                     self.push(ret);
                 }
             }
-            Instruction::Operator(op) => self.run_operator(op)?,
+            Instruction::BinaryOperator(op) => self.run_operator(op)?,
             Instruction::Goto(pos) => {
                 self.cursor = pos as usize;
                 return Ok(());

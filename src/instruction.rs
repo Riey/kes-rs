@@ -1,4 +1,7 @@
-use crate::operator::{BinaryOperator, UnaryOperator};
+use crate::{
+    location::Location,
+    operator::{BinaryOperator, UnaryOperator},
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Instruction<'s> {
@@ -18,4 +21,10 @@ pub enum Instruction<'s> {
     UnaryOperator(UnaryOperator),
     Goto(u32),
     GotoIfNot(u32),
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct InstructionWithDebug<'s> {
+    pub inst: Instruction<'s>,
+    pub location: Location,
 }

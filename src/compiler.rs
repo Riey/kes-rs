@@ -1,17 +1,28 @@
+use crate::location::Location;
 use crate::{ast::Expr, ast::Stmt};
-use crate::{error::ParseError, instruction::Instruction};
+use crate::{
+    error::ParseError,
+    instruction::{Instruction, InstructionWithDebug},
+};
 
 pub struct Compiler<'s> {
-    out: Vec<Instruction<'s>>,
+    out: Vec<InstructionWithDebug<'s>>,
+    location: Location,
 }
 
 impl<'s> Compiler<'s> {
     pub fn new() -> Self {
-        Self { out: Vec::new() }
+        Self {
+            out: Vec::new(),
+            location: Location::default(),
+        }
     }
 
     fn push(&mut self, inst: Instruction<'s>) {
-        self.out.push(inst);
+        self.out.push(InstructionWithDebug {
+            inst,
+            location: self.location,
+        });
     }
 
     fn next_pos(&self) -> usize {
@@ -30,7 +41,9 @@ impl<'s> Compiler<'s> {
                 values,
                 newline,
                 wait,
+                location,
             } => {
+                self.location = *location;
                 for value in values {
                     self.push_expr(value);
                 }
@@ -39,15 +52,26 @@ impl<'s> Compiler<'s> {
                     newline: *newline,
                 });
             }
-            Stmt::Assign { var, value } => {
+            Stmt::Assign {
+                var,
+                value,
+                location,
+            } => {
+                self.location = *location;
                 self.push_expr(value);
                 self.push(Instruction::StoreVar(*var));
             }
-            Stmt::Expression(expr) => {
+            Stmt::Expression { expr, location } => {
+                self.location = *location;
                 self.push_expr(expr);
                 self.push(Instruction::Pop);
             }
-            Stmt::If { arms, other } => {
+            Stmt::If {
+                arms,
+                other,
+                location,
+            } => {
+                self.location = *location;
                 let mut mark = 0;
                 let mut else_mark = Vec::with_capacity(arms.len());
 
@@ -55,7 +79,7 @@ impl<'s> Compiler<'s> {
                     let first = idx == 0;
 
                     if !first {
-                        self.out[mark] = Instruction::GotoIfNot(self.next_pos() as u32);
+                        self.out[mark].inst = Instruction::GotoIfNot(self.next_pos() as u32);
                     }
 
                     self.push_expr(cond);
@@ -67,23 +91,28 @@ impl<'s> Compiler<'s> {
                 }
 
                 if !arms.is_empty() {
-                    self.out[mark] = Instruction::GotoIfNot(self.next_pos() as u32);
+                    self.out[mark].inst = Instruction::GotoIfNot(self.next_pos() as u32);
                 }
 
                 self.compile_body(other);
 
                 for mark in else_mark {
-                    self.out[mark] = Instruction::Goto(self.next_pos() as u32);
+                    self.out[mark].inst = Instruction::Goto(self.next_pos() as u32);
                 }
             }
-            Stmt::While { cond, body } => {
+            Stmt::While {
+                cond,
+                body,
+                location,
+            } => {
+                self.location = *location;
                 let first = self.next_pos();
                 self.push_expr(cond);
                 let end = self.mark_pos();
 
                 self.compile_body(body);
                 self.push(Instruction::Goto(first as u32));
-                self.out[end] = Instruction::GotoIfNot(self.next_pos() as u32);
+                self.out[end].inst = Instruction::GotoIfNot(self.next_pos() as u32);
             }
         }
     }
@@ -111,17 +140,17 @@ impl<'s> Compiler<'s> {
         }
     }
 
-    pub fn compile(mut self, program: &[Stmt<'s>]) -> Vec<Instruction<'s>> {
+    pub fn compile(mut self, program: &[Stmt<'s>]) -> Vec<InstructionWithDebug<'s>> {
         self.compile_body(program);
         self.out
     }
 }
 
-pub fn compile<'s>(program: &[Stmt<'s>]) -> Vec<Instruction<'s>> {
+pub fn compile<'s>(program: &[Stmt<'s>]) -> Vec<InstructionWithDebug<'s>> {
     Compiler::new().compile(program)
 }
 
-pub fn compile_source<'s>(source: &'s str) -> Result<Vec<Instruction<'s>>, ParseError> {
+pub fn compile_source<'s>(source: &'s str) -> Result<Vec<InstructionWithDebug<'s>>, ParseError> {
     Ok(compile(&crate::parser::parse(source)?))
 }
 
@@ -131,38 +160,48 @@ mod tests {
     use crate::{instruction::Instruction, operator::BinaryOperator};
     use pretty_assertions::assert_eq;
 
+    fn test_impl(source: &str, insts: &[Instruction]) {
+        let compiled = compile_source(source)
+            .unwrap()
+            .into_iter()
+            .map(|i| i.inst)
+            .collect::<Vec<_>>();
+
+        assert_eq!(compiled, insts);
+    }
+
     #[test]
     fn simple() {
-        assert_eq!(
-            compile_source("1 + 2;").unwrap(),
+        test_impl(
+            "1 + 2;",
             &[
                 Instruction::LoadInt(1),
                 Instruction::LoadInt(2),
                 Instruction::BinaryOperator(BinaryOperator::Add),
                 Instruction::Pop,
-            ]
+            ],
         );
     }
 
     #[test]
     fn print() {
-        assert_eq!(
-            compile_source("@ 123 '123';").unwrap(),
+        test_impl(
+            "@ 123 '123';",
             &[
                 Instruction::LoadInt(123),
                 Instruction::LoadStr("123"),
                 Instruction::Print {
                     newline: true,
-                    wait: false
+                    wait: false,
                 },
-            ]
+            ],
         )
     }
 
     #[test]
     fn if_simple() {
-        assert_eq!(
-            compile_source("만약 1 + 2 { 0; } 혹은 1 { 1; } 그외 { 2; }").unwrap(),
+        test_impl(
+            "만약 1 + 2 { 0; } 혹은 1 { 1; } 그외 { 2; }",
             &[
                 Instruction::LoadInt(1),
                 Instruction::LoadInt(2),
@@ -178,14 +217,14 @@ mod tests {
                 Instruction::Goto(14),
                 Instruction::LoadInt(2),
                 Instruction::Pop,
-            ]
+            ],
         );
     }
 
     #[test]
     fn while_simple() {
-        assert_eq!(
-            compile_source("반복 1 + 2 { 2; } 3;").unwrap(),
+        test_impl(
+            "반복 1 + 2 { 2; } 3;",
             &[
                 Instruction::LoadInt(1),
                 Instruction::LoadInt(2),
@@ -196,7 +235,7 @@ mod tests {
                 Instruction::Goto(0),
                 Instruction::LoadInt(3),
                 Instruction::Pop,
-            ]
+            ],
         )
     }
 }
