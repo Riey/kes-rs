@@ -44,6 +44,8 @@ impl<'s> Lexer<'s> {
     }
 
     fn skip_ws(&mut self) {
+        const LINE_COMMENT: u8 = b'#';
+
         let mut bytes = self.text.as_bytes().iter();
         while let Some(b) = bytes.next() {
             match b {
@@ -51,7 +53,7 @@ impl<'s> Lexer<'s> {
                 b'\n' => {
                     self.line += 1;
                 }
-                b';' => {
+                &LINE_COMMENT => {
                     let slice = bytes.as_slice();
                     let pos = memchr::memchr(b'\n', slice).unwrap_or(slice.len());
                     bytes = unsafe { slice.get_unchecked(pos..) }.iter();
@@ -251,12 +253,18 @@ impl<'s> Lexer<'s> {
             Ok(Token::OpenParan)
         } else if self.try_match_pop_byte(b')') {
             Ok(Token::CloseParan)
-        } else if self.try_match_pop_byte(b'#') {
-            Ok(Token::PrintWait)
         } else if self.try_match_pop_byte(b'@') {
-            Ok(Token::PrintLine)
-        } else if self.try_match_pop_byte(b'~') {
-            Ok(Token::Print)
+            if self.try_match_pop_byte(b'@') {
+                Ok(Token::Print)
+            } else if self.try_match_pop_byte(b'!') {
+                Ok(Token::PrintWait)
+            } else {
+                Ok(Token::PrintLine)
+            }
+        } else if self.try_match_pop_byte(b';') {
+            Ok(Token::SemiColon)
+        } else if self.try_match_pop_byte(b',') {
+            Ok(Token::Comma)
         } else {
             Err(self.make_char_err(self.text.chars().next().unwrap()))
         }
@@ -286,7 +294,7 @@ impl<'s> Iterator for Lexer<'s> {
 #[test]
 fn lex_test() {
     use pretty_assertions::assert_eq;
-    let mut ts = Lexer::new("'ABC'#");
+    let mut ts = Lexer::new("@'ABC'");
 
     macro_rules! next {
         () => {
@@ -294,20 +302,20 @@ fn lex_test() {
         };
     }
 
+    assert_eq!(next!(), Token::PrintLine,);
     assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert!(ts.text.is_empty());
+
+    ts = Lexer::new("@!  A 'ABC'");
     assert_eq!(next!(), Token::PrintWait,);
-    assert!(ts.text.is_empty());
-
-    ts = Lexer::new("A 'ABC' @");
     assert_eq!(next!(), Token::Builtin("A"),);
     assert_eq!(next!(), Token::StrLit("ABC"),);
-    assert_eq!(next!(), Token::PrintLine,);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new(";foo\n A 'ABC' @");
+    ts = Lexer::new("@#foo\n A 'ABC'");
+    assert_eq!(next!(), Token::PrintLine,);
     assert_eq!(next!(), Token::Builtin("A"),);
     assert_eq!(next!(), Token::StrLit("ABC"),);
-    assert_eq!(next!(), Token::PrintLine,);
 
     ts = Lexer::new("$1 = 1 + 2");
     assert_eq!(next!(), Token::Variable("1"));

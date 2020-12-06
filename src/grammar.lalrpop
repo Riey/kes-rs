@@ -1,6 +1,6 @@
 use crate::token::Token;
 use crate::ast::{Expr, Stmt};
-use crate::operator::BinaryOperator;
+use crate::operator::{UnaryOperator, BinaryOperator};
 use crate::lexer::Location;
 use crate::error::LexicalError;
 
@@ -11,7 +11,21 @@ pub Program: Vec<Stmt<'s>> = {
 }
 
 Stmt: Stmt<'s> = {
-    <var:var> "=" <value:Expr> => { Stmt::Assign { var, value } }
+    <var:var> "=" <value:Expr> ";" => { Stmt::Assign { var, value } },
+    "PRINT" <values:ExprList> => { Stmt::Print { values, newline: false, wait: false }},
+    "PRINTL" <values:ExprList> => { Stmt::Print { values, newline: true, wait: false }},
+    
+    <stmt:Stmt> ";" => { stmt },
+}
+
+ExprList: Vec<Expr<'s>> = {
+    <elements: ExprWithComma*> => elements,
+}
+
+ExprWithComma: Expr<'s> = {
+    <expr:Expr> ","? => {
+        expr
+    }
 }
 
 Expr: Expr<'s> = { AddExpr }
@@ -63,13 +77,20 @@ extern {
 
     enum Token<'s> {
         "만약" => Token::If,
+        "PRINT" => Token::Print,
+        "PRINTL" => Token::PrintLine,
+        "PRINTW" => Token::PrintWait,
         "{" => Token::OpenBrace,
         "}" => Token::CloseBrace,
         "+" => Token::BinaryOp(BinaryOperator::Add),
         "-" => Token::BinaryOp(BinaryOperator::Sub),
         "*" => Token::BinaryOp(BinaryOperator::Mul),
         "/" => Token::BinaryOp(BinaryOperator::Div),
+        "%" => Token::BinaryOp(BinaryOperator::Rem),
+        "!" => Token::UnaryOp(UnaryOperator::Not),
         "=" => Token::Assign,
+        ";" => Token::SemiColon,
+        "," => Token::Comma,
         number => Token::IntLit(<u32>),
         string => Token::StrLit(<&'s str>),
         var => Token::Variable(<&'s str>),

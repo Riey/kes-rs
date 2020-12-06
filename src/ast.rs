@@ -2,7 +2,15 @@ use crate::operator::BinaryOperator;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Stmt<'s> {
-    Assign { var: &'s str, value: Expr<'s> },
+    Assign {
+        var: &'s str,
+        value: Expr<'s>,
+    },
+    Print {
+        values: Vec<Expr<'s>>,
+        newline: bool,
+        wait: bool,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

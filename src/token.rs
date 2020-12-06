@@ -43,14 +43,18 @@ pub enum Token<'s> {
     /// )
     CloseParan,
 
-    /// ~
+    /// @@
     Print,
-
+    /// @!
+    PrintWait,
     /// @
     PrintLine,
 
-    /// #
-    PrintWait,
+    /// ;
+    SemiColon,
+
+    /// ,
+    Comma,
 
     /// =
     Assign,

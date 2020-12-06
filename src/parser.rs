@@ -19,7 +19,7 @@ mod tests {
     #[test]
     fn add() {
         assert_eq!(
-            parse("$1 = 1 + 2 * 3").unwrap(),
+            parse("$1 = 1 + 2 * 3;").unwrap(),
             [Stmt::Assign {
                 var: "1",
                 value: Expr::BinaryOp {
@@ -33,5 +33,15 @@ mod tests {
                 }
             }]
         );
+    }
+
+    #[test]
+    fn print() {
+        assert_eq!(
+            parse("@ '123' 123").unwrap(),
+            [
+                Stmt::Print { values: vec![Expr::String("123"), Expr::Number(123)], newline: true, wait: false }
+            ]
+        )
     }
 }
