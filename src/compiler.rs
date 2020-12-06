@@ -14,6 +14,16 @@ impl<'s> Compiler<'s> {
         self.out.push(inst);
     }
 
+    fn next_pos(&self) -> usize {
+        self.out.len()
+    }
+
+    fn mark_pos(&mut self) -> usize {
+        let next = self.next_pos();
+        self.push(Instruction::Nop);
+        next
+    }
+
     fn compile_stmt(&mut self, stmt: &Stmt<'s>) {
         match stmt {
             Stmt::Print {
@@ -37,7 +47,36 @@ impl<'s> Compiler<'s> {
                 self.push_expr(expr);
                 self.push(Instruction::Pop);
             }
-            Stmt::If { .. } | Stmt::While { .. } => todo!(),
+            Stmt::If { arms, other } => {
+                let mut mark = 0;
+                let mut else_mark = Vec::with_capacity(arms.len());
+
+                for (idx, (cond, body)) in arms.iter().enumerate() {
+                    let first = idx == 0;
+
+                    if !first {
+                        self.out[mark] = Instruction::GotoIfNot(self.next_pos() as u32);
+                    }
+
+                    self.push_expr(cond);
+
+                    mark = self.mark_pos();
+
+                    self.compile_body(body);
+                    else_mark.push(self.mark_pos());
+                }
+
+                if !arms.is_empty() {
+                    self.out[mark] = Instruction::GotoIfNot(self.next_pos() as u32);
+                }
+
+                self.compile_body(other);
+
+                for mark in else_mark {
+                    self.out[mark] = Instruction::Goto(self.next_pos() as u32);
+                }
+            }
+            Stmt::While { .. } => todo!(),
         }
     }
 
@@ -98,15 +137,39 @@ mod tests {
     }
 
     #[test]
+    fn print() {
+        assert_eq!(
+            compile_source("@ 123 '123';").unwrap(),
+            &[
+                Instruction::LoadInt(123),
+                Instruction::LoadStr("123"),
+                Instruction::Print {
+                    newline: true,
+                    wait: false
+                },
+            ]
+        )
+    }
+
+    #[test]
     fn if_simple() {
         assert_eq!(
-            compile_source("만약 1 + 2 { }").unwrap(),
+            compile_source("만약 1 + 2 { 0; } 혹은 1 { 1; } 그외 { 2; }").unwrap(),
             &[
                 Instruction::LoadInt(1),
                 Instruction::LoadInt(2),
                 Instruction::BinaryOperator(BinaryOperator::Add),
-                Instruction::GotoIfNot(1),
-                Instruction::Goto(1),
+                Instruction::GotoIfNot(7),
+                Instruction::LoadInt(0),
+                Instruction::Pop,
+                Instruction::Goto(14),
+                Instruction::LoadInt(1),
+                Instruction::GotoIfNot(12),
+                Instruction::LoadInt(1),
+                Instruction::Pop,
+                Instruction::Goto(14),
+                Instruction::LoadInt(2),
+                Instruction::Pop,
             ]
         );
     }
