@@ -28,10 +28,12 @@ pub type LexicalResult<T> = Result<T, LexicalError>;
 
 #[derive(Clone, Error)]
 pub enum RuntimeError {
-    #[error("{1}번째 줄 실행중 에러발생 {0}")]
-    ExecutionError(&'static str, usize),
-    #[error("{1}번째 줄 실행중 잘못된 `{0}` 타입이 들어왔습니다")]
-    TypeError(&'static str, usize),
+    #[error("실행중 에러발생 {0}")]
+    ExecutionError(&'static str),
+    #[error("변수 `{0}`가 존재하지 않습니다")]
+    VariableNotFound(String),
+    #[error("잘못된 `{0}` 타입이 들어왔습니다")]
+    TypeError(&'static str),
 }
 
 impl Debug for RuntimeError {

@@ -2,13 +2,14 @@ use lalrpop_util::lalrpop_mod;
 
 pub mod ast;
 // pub mod builtin;
+pub mod compiler;
 // pub mod context;
 pub mod error;
 lalrpop_mod!(
     #[allow(unused)]
     grammar
 );
-// pub mod instruction;
+pub mod instruction;
 mod lexer;
 pub mod operator;
 pub mod parser;
