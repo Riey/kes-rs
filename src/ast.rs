@@ -17,6 +17,7 @@ pub enum Stmt<'s> {
 pub enum Expr<'s> {
     Number(u32),
     String(&'s str),
+    Variable(&'s str),
 
     BinaryOp {
         lhs: Box<Expr<'s>>,

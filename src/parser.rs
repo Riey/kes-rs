@@ -38,10 +38,44 @@ mod tests {
     #[test]
     fn print() {
         assert_eq!(
-            parse("@ '123' 123").unwrap(),
-            [
-                Stmt::Print { values: vec![Expr::String("123"), Expr::Number(123)], newline: true, wait: false }
-            ]
+            parse("@ '123' 123;").unwrap(),
+            [Stmt::Print {
+                values: vec![Expr::String("123"), Expr::Number(123)],
+                newline: true,
+                wait: false
+            }]
         )
+    }
+
+    #[test]
+    fn variable() {
+        assert_eq!(
+            parse(
+                "
+            $1 = 1;
+            $2 = 2;
+            $3 = $1 + $2;
+            "
+            )
+            .unwrap(),
+            [
+                Stmt::Assign {
+                    var: "1",
+                    value: Expr::Number(1)
+                },
+                Stmt::Assign {
+                    var: "2",
+                    value: Expr::Number(2)
+                },
+                Stmt::Assign {
+                    var: "3",
+                    value: Expr::BinaryOp {
+                        lhs: Box::new(Expr::Variable("1")),
+                        rhs: Box::new(Expr::Variable("2")),
+                        op: BinaryOperator::Add,
+                    }
+                },
+            ]
+        );
     }
 }

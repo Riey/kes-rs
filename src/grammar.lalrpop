@@ -11,32 +11,31 @@ pub Program: Vec<Stmt<'s>> = {
 }
 
 Stmt: Stmt<'s> = {
+    "PRINT" <values:Expr*> ";" => { Stmt::Print { values, newline: false, wait: false }},
+    "PRINTL" <values:Expr*> ";" => { Stmt::Print { values, newline: true, wait: false }},
     <var:var> "=" <value:Expr> ";" => { Stmt::Assign { var, value } },
-    "PRINT" <values:ExprList> => { Stmt::Print { values, newline: false, wait: false }},
-    "PRINTL" <values:ExprList> => { Stmt::Print { values, newline: true, wait: false }},
-    
-    <stmt:Stmt> ";" => { stmt },
+    <Stmt> ";" => <>,
 }
 
+#[inline]
 ExprList: Vec<Expr<'s>> = {
-    <elements: ExprWithComma*> => elements,
+    <elements: ExprWithComma+> => elements,
 }
 
+#[inline]
 ExprWithComma: Expr<'s> = {
     <expr:Expr> ","? => {
         expr
     }
 }
 
-Expr: Expr<'s> = { AddExpr }
-
-AddExpr: Expr<'s> = {
-    <lhs:AddExpr> <op:AddOp> <rhs:Term> => Expr::BinaryOp {
+Expr: Expr<'s> = {
+    <lhs:Expr> <op:AddOp> <rhs:Factor> => Expr::BinaryOp {
         lhs: Box::new(lhs),
         rhs: Box::new(rhs),
         op,
     },
-    Term,
+    Factor,
 }
 
 AddOp: BinaryOperator = {
@@ -44,13 +43,13 @@ AddOp: BinaryOperator = {
     "-" => BinaryOperator::Sub,
 }
 
-Term: Expr<'s> = {
-    <lhs:Term> <op:MulOp> <rhs:Atom> => Expr::BinaryOp {
+Factor: Expr<'s> = {
+    <lhs:Factor> <op:MulOp> <rhs:Term> => Expr::BinaryOp {
         lhs: Box::new(lhs),
         rhs: Box::new(rhs),
         op,
     },
-    Atom,
+    Term,
 }
 
 MulOp: BinaryOperator = {
@@ -58,17 +57,11 @@ MulOp: BinaryOperator = {
     "/" => BinaryOperator::Div,
 }
 
-Atom: Expr<'s> = {
-    Num,
-    Str,
-}
-
-Num: Expr<'s> = {
-    <value:number> => { Expr::Number(value) }
-}
-
-Str: Expr<'s> = {
-    <value:string> => { Expr::String(value) }
+Term: Expr<'s> = {
+    <value:number> => { Expr::Number(value) },
+    <value:string> => { Expr::String(value) },
+    <var:var> => { Expr::Variable(var) },
+    "(" <Expr> ")",
 }
 
 extern {
@@ -82,6 +75,8 @@ extern {
         "PRINTW" => Token::PrintWait,
         "{" => Token::OpenBrace,
         "}" => Token::CloseBrace,
+        "(" => Token::OpenParan,
+        ")" => Token::CloseParan,
         "+" => Token::BinaryOp(BinaryOperator::Add),
         "-" => Token::BinaryOp(BinaryOperator::Sub),
         "*" => Token::BinaryOp(BinaryOperator::Mul),
