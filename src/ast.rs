@@ -35,7 +35,10 @@ pub enum Expr<'s> {
     Number(u32),
     String(&'s str),
     Variable(&'s str),
-
+    BuiltinFunc {
+        name: &'s str,
+        args: Vec<Expr<'s>>,
+    },
     UnaryOp {
         value: Box<Expr<'s>>,
         op: UnaryOperator,

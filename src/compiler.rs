@@ -124,6 +124,12 @@ impl<'s> Compiler<'s> {
             Expr::Number(num) => self.push(Instruction::LoadInt(*num)),
             Expr::String(str) => self.push(Instruction::LoadStr(*str)),
             Expr::Variable(var) => self.push(Instruction::LoadVar(*var)),
+            Expr::BuiltinFunc { name, args } => {
+                for arg in args.iter() {
+                    self.push_expr(arg);
+                }
+                self.push(Instruction::CallBuiltin(*name));
+            }
             Expr::UnaryOp { value, op } => {
                 self.push_expr(value);
                 self.push(Instruction::UnaryOperator(*op));
@@ -259,6 +265,22 @@ mod tests {
                 Instruction::TernaryOperator(TernaryOperator::Conditional),
                 Instruction::Pop,
             ],
+        );
+    }
+
+    #[test]
+    fn builtin() {
+        test_impl(
+            "변수(); 함수(1 + 2);",
+            &[
+                Instruction::CallBuiltin("변수"),
+                Instruction::Pop,
+                Instruction::LoadInt(1),
+                Instruction::LoadInt(2),
+                Instruction::BinaryOperator(BinaryOperator::Add),
+                Instruction::CallBuiltin("함수"),
+                Instruction::Pop,
+            ]
         );
     }
 }

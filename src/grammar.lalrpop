@@ -40,18 +40,6 @@ ElseStmt: Vec<Stmt<'s>> = {
     "그외" "{" <body:Body> "}" => body,
 }
 
-#[inline]
-ExprList: Vec<Expr<'s>> = {
-    <elements: ExprWithComma+> => elements,
-}
-
-#[inline]
-ExprWithComma: Expr<'s> = {
-    <expr:Expr> ","? => {
-        expr
-    }
-}
-
 Expr: Expr<'s> = {
     <lhs:Expr> "?" <mhs:BoolExpr> ":" <rhs:BoolExpr> => lhs.ternary_op(mhs, rhs, TernaryOperator::Conditional),
     BoolExpr,
@@ -85,8 +73,8 @@ AddOp: BinaryOperator = {
 }
 
 Factor: Expr<'s> = {
-    <lhs:Factor> <op:MulOp> <rhs:Term> => lhs.binary_op(rhs, op),
-    Term,
+    <lhs:Factor> <op:MulOp> <rhs:UnaryExpr> => lhs.binary_op(rhs, op),
+    UnaryExpr,
 }
 
 MulOp: BinaryOperator = {
@@ -95,11 +83,34 @@ MulOp: BinaryOperator = {
     "%" => BinaryOperator::Rem,
 }
 
+UnaryExpr: Expr<'s> = {
+    <op:UnaryOp> <expr:CallExpr> => expr.unary_op(UnaryOperator::Not),
+    CallExpr,
+}
+
+UnaryOp: UnaryOperator = {
+    "!" => UnaryOperator::Not,
+}
+
+CallExpr: Expr<'s> = {
+    <name:built> <args:CallArgs> => Expr::BuiltinFunc { name, args },
+    Term,
+}
+
+#[inline]
+CallArgs: Vec<Expr<'s>> = {
+    "(" <Arg*> ")" => <>,
+}
+
+#[inline]
+Arg: Expr<'s> = {
+    <Expr> ","? => <>,
+}
+
 Term: Expr<'s> = {
     <value:number> => Expr::Number(value),
     <value:string> => Expr::String(value),
-    <var:var> => Expr::Variable(var),
-    "!" <Term> => <>.unary_op(UnaryOperator::Not),
+    <name:var> => Expr::Variable(name),
     "(" <Expr> ")",
 }
 
@@ -145,6 +156,7 @@ extern {
         "=" => Token::Assign,
         ";" => Token::SemiColon,
         "," => Token::Comma,
+        built => Token::Builtin(<&'s str>),
         number => Token::IntLit(<u32>),
         string => Token::StrLit(<&'s str>),
         var => Token::Variable(<&'s str>),

@@ -28,6 +28,10 @@ impl<'c> Context<'c> {
         }
     }
 
+    pub fn args(&self) -> &[Value] {
+        &self.stack[..]
+    }
+
     #[inline]
     fn push(&mut self, v: impl Into<Value>) {
         self.stack.push(v.into());
@@ -215,15 +219,9 @@ impl<'c> Context<'c> {
                 let item = self.pop_ret()?;
                 self.variables.insert(name, item);
             }
-            Instruction::LoadBuiltin(name) => {
-                self.push(builtin.load(name));
-            }
             Instruction::CallBuiltin(name) => {
                 let ret = builtin.run(name, self).await;
-                self.stack.pop();
-                if let Some(ret) = ret {
-                    self.push(ret);
-                }
+                self.push(ret);
             }
             Instruction::BinaryOperator(op) => self.run_bin_operator(op)?,
             Instruction::UnaryOperator(crate::operator::UnaryOperator::Not) => {
