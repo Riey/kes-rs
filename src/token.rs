@@ -1,7 +1,8 @@
+use crate::interner::Symbol;
 use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Token<'s> {
+pub enum Token {
     /// 만약
     If,
     /// 혹은
@@ -13,13 +14,13 @@ pub enum Token<'s> {
     /// 반복
     While,
     /// ''
-    StrLit(&'s str),
+    StrLit(Symbol),
     /// 123
     IntLit(u32),
     /// ABC
-    Builtin(&'s str),
+    Builtin(Symbol),
     /// $ABC
-    Variable(&'s str),
+    Variable(Symbol),
 
     /// !
     UnaryOp(UnaryOperator),

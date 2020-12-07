@@ -3,7 +3,7 @@ use crate::token::Token;
 use std::fmt::{self, Debug, Formatter};
 use thiserror::Error;
 
-pub type ParseError<'s> = lalrpop_util::ParseError<Location, Token<'s>, LexicalError>;
+pub type ParseError = lalrpop_util::ParseError<Location, Token, LexicalError>;
 
 #[derive(Clone, Error)]
 pub enum LexicalError {

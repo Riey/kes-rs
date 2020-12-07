@@ -2,6 +2,7 @@ use crate::builtin::Builtin;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::instruction::InstructionWithDebug;
+use crate::interner::{Interner, Symbol};
 use crate::location::Location;
 use crate::operator::{BinaryOperator, TernaryOperator};
 use crate::value::{Value, ValueConvertError};
@@ -12,15 +13,17 @@ use std::fmt::Write;
 static_assertions::assert_impl_all!(Context: Send, Sync);
 
 pub struct Context<'c> {
-    pub instructions: &'c [InstructionWithDebug<'c>],
+    pub instructions: &'c [InstructionWithDebug],
     stack: Vec<Value>,
-    pub variables: AHashMap<&'c str, Value>,
+    interner: &'c Interner,
+    pub variables: AHashMap<Symbol, Value>,
     cursor: usize,
 }
 
 impl<'c> Context<'c> {
-    pub fn new(instructions: &'c [InstructionWithDebug<'c>]) -> Self {
+    pub fn new(instructions: &'c [InstructionWithDebug], interner: &'c Interner) -> Self {
         Self {
+            interner,
             instructions,
             stack: Vec::with_capacity(50),
             variables: AHashMap::new(),
@@ -202,7 +205,7 @@ impl<'c> Context<'c> {
     pub async fn run_instruction<B: Builtin>(
         &mut self,
         builtin: &mut B,
-        inst: InstructionWithDebug<'c>,
+        inst: InstructionWithDebug,
     ) -> RuntimeResult<()> {
         match inst.inst {
             Instruction::Exit => {
@@ -210,9 +213,13 @@ impl<'c> Context<'c> {
                 return Ok(());
             }
             Instruction::LoadInt(num) => self.push(num),
-            Instruction::LoadStr(str) => self.push(str),
+            Instruction::LoadStr(str) => self.push(self.interner.resolve(str).unwrap()),
             Instruction::LoadVar(name) => {
-                let item = self.variables[name].clone();
+                let item = self
+                    .variables
+                    .get(&name)
+                    .ok_or(self.make_err("변수를 찾을수 없습니다"))?
+                    .clone();
                 self.push(item);
             }
             Instruction::StoreVar(name) => {
@@ -220,7 +227,14 @@ impl<'c> Context<'c> {
                 self.variables.insert(name, item);
             }
             Instruction::CallBuiltin(name) => {
-                let ret = builtin.run(name, self).await;
+                let ret = builtin
+                    .run(
+                        self.interner
+                            .resolve(name)
+                            .ok_or(self.make_err("알수없는 심볼입니다"))?,
+                        self,
+                    )
+                    .await;
                 self.push(ret);
             }
             Instruction::BinaryOperator(op) => self.run_bin_operator(op)?,
@@ -286,13 +300,15 @@ mod tests {
     use crate::builtin::RecordBuiltin;
     use crate::compiler::compile_source;
     use crate::error::{RuntimeError, RuntimeResult};
+    use crate::interner::Interner;
     use pretty_assertions::assert_eq;
 
     fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
-        let instructions = compile_source(code).unwrap();
+        let mut interner = Interner::default();
+        let instructions = compile_source(code, &mut interner).unwrap();
 
         let mut builtin = RecordBuiltin::new();
-        let ctx = Context::new(&instructions);
+        let ctx = Context::new(&instructions, &interner);
 
         futures_executor::block_on(ctx.run(&mut builtin))?;
 

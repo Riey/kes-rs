@@ -3,18 +3,19 @@ use crate::ast::{Expr, Stmt};
 use crate::operator::{UnaryOperator, BinaryOperator, TernaryOperator};
 use crate::location::Location;
 use crate::error::LexicalError;
+use crate::interner::Symbol;
 
-grammar<'s>;
+grammar;
 
-pub Program: Vec<Stmt<'s>> = {
+pub Program: Vec<Stmt> = {
     Body,
 };
 
-Body: Vec<Stmt<'s>> = {
+Body: Vec<Stmt> = {
     <stmts: Stmt*> => stmts,
 }
 
-Stmt: Stmt<'s> = {
+Stmt: Stmt = {
     "종료" ";" => Stmt::Exit,
     <location:@L> <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value, location },
     <location:@L> "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false, location },
@@ -33,20 +34,20 @@ Stmt: Stmt<'s> = {
     <Stmt> ";" => <>,
 }
 
-ElseIfStmt: (Expr<'s>, Vec<Stmt<'s>>) = {
+ElseIfStmt: (Expr, Vec<Stmt>) = {
     "혹은" <cond:Expr> "{" <body:Body> "}" => (cond, body),
 }
 
-ElseStmt: Vec<Stmt<'s>> = {
+ElseStmt: Vec<Stmt> = {
     "그외" "{" <body:Body> "}" => body,
 }
 
-Expr: Expr<'s> = {
+Expr: Expr = {
     <lhs:Expr> "?" <mhs:BoolExpr> ":" <rhs:BoolExpr> => lhs.ternary_op(mhs, rhs, TernaryOperator::Conditional),
     BoolExpr,
 }
 
-BoolExpr: Expr<'s> = {
+BoolExpr: Expr = {
     <lhs:BoolExpr> <op:BoolOp> <rhs:ArithmeticExpr> => lhs.binary_op(rhs, op),
     ArithmeticExpr,
 }
@@ -63,7 +64,7 @@ BoolOp: BinaryOperator = {
     "^" => BinaryOperator::Xor,
 }
 
-ArithmeticExpr: Expr<'s> = {
+ArithmeticExpr: Expr = {
     <lhs:ArithmeticExpr> <op:AddOp> <rhs:Factor> => lhs.binary_op(rhs, op),
     Factor,
 }
@@ -73,7 +74,7 @@ AddOp: BinaryOperator = {
     "-" => BinaryOperator::Sub,
 }
 
-Factor: Expr<'s> = {
+Factor: Expr = {
     <lhs:Factor> <op:MulOp> <rhs:UnaryExpr> => lhs.binary_op(rhs, op),
     UnaryExpr,
 }
@@ -84,7 +85,7 @@ MulOp: BinaryOperator = {
     "%" => BinaryOperator::Rem,
 }
 
-UnaryExpr: Expr<'s> = {
+UnaryExpr: Expr = {
     <op:UnaryOp> <expr:CallExpr> => expr.unary_op(UnaryOperator::Not),
     CallExpr,
 }
@@ -93,22 +94,22 @@ UnaryOp: UnaryOperator = {
     "!" => UnaryOperator::Not,
 }
 
-CallExpr: Expr<'s> = {
+CallExpr: Expr = {
     <name:built> <args:CallArgs> => Expr::BuiltinFunc { name, args },
     Term,
 }
 
 #[inline]
-CallArgs: Vec<Expr<'s>> = {
+CallArgs: Vec<Expr> = {
     "(" <Arg*> ")" => <>,
 }
 
 #[inline]
-Arg: Expr<'s> = {
+Arg: Expr = {
     <Expr> ","? => <>,
 }
 
-Term: Expr<'s> = {
+Term: Expr = {
     <value:number> => Expr::Number(value),
     <value:string> => Expr::String(value),
     <name:var> => Expr::Variable(name),
@@ -119,7 +120,7 @@ extern {
     type Location = Location;
     type Error = LexicalError;
 
-    enum Token<'s> {
+    enum Token {
         "만약" => Token::If,
         "혹은" => Token::ElseIf,
         "그외" => Token::Else,
@@ -158,10 +159,10 @@ extern {
         "=" => Token::Assign,
         ";" => Token::SemiColon,
         "," => Token::Comma,
-        built => Token::Builtin(<&'s str>),
+        built => Token::Builtin(<Symbol>),
         number => Token::IntLit(<u32>),
-        string => Token::StrLit(<&'s str>),
-        var => Token::Variable(<&'s str>),
+        string => Token::StrLit(<Symbol>),
+        var => Token::Variable(<Symbol>),
     }
 } 
 

@@ -1,65 +1,65 @@
 use crate::operator::{BinaryOperator, UnaryOperator};
-use crate::{location::Location, operator::TernaryOperator};
+use crate::{interner::Symbol, location::Location, operator::TernaryOperator};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Stmt<'s> {
+pub enum Stmt {
     Assign {
-        var: &'s str,
-        value: Expr<'s>,
+        var: Symbol,
+        value: Expr,
         location: Location,
     },
     Print {
-        values: Vec<Expr<'s>>,
+        values: Vec<Expr>,
         newline: bool,
         wait: bool,
         location: Location,
     },
     If {
-        arms: Vec<(Expr<'s>, Vec<Stmt<'s>>)>,
-        other: Vec<Stmt<'s>>,
+        arms: Vec<(Expr, Vec<Stmt>)>,
+        other: Vec<Stmt>,
         location: Location,
     },
     While {
-        cond: Expr<'s>,
-        body: Vec<Stmt<'s>>,
+        cond: Expr,
+        body: Vec<Stmt>,
         location: Location,
     },
     Expression {
-        expr: Expr<'s>,
+        expr: Expr,
         location: Location,
     },
     Exit,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Expr<'s> {
+pub enum Expr {
     Number(u32),
-    String(&'s str),
-    Variable(&'s str),
+    String(Symbol),
+    Variable(Symbol),
     BuiltinFunc {
-        name: &'s str,
-        args: Vec<Expr<'s>>,
+        name: Symbol,
+        args: Vec<Expr>,
     },
     UnaryOp {
-        value: Box<Expr<'s>>,
+        value: Box<Expr>,
         op: UnaryOperator,
     },
 
     BinaryOp {
-        lhs: Box<Expr<'s>>,
-        rhs: Box<Expr<'s>>,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
         op: BinaryOperator,
     },
 
     TernaryOp {
-        lhs: Box<Expr<'s>>,
-        mhs: Box<Expr<'s>>,
-        rhs: Box<Expr<'s>>,
+        lhs: Box<Expr>,
+        mhs: Box<Expr>,
+        rhs: Box<Expr>,
         op: TernaryOperator,
     },
 }
 
-impl<'s> Expr<'s> {
+impl Expr {
     pub fn unary_op(self, op: UnaryOperator) -> Self {
         Expr::UnaryOp {
             value: Box::new(self),

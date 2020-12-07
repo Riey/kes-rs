@@ -10,6 +10,7 @@ lalrpop_mod!(
     grammar
 );
 pub mod instruction;
+pub mod interner;
 mod lexer;
 pub mod location;
 pub mod operator;

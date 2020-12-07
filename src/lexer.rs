@@ -1,9 +1,10 @@
 use crate::error::{LexicalError, LexicalResult as Result};
+use crate::interner::Interner;
 use crate::location::Location;
 use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 use crate::token::Token;
 
-pub type Spanned<'s> = (Location, Token<'s>, Location);
+pub type Spanned = (Location, Token, Location);
 
 fn is_ident_char(c: char) -> bool {
     match c {
@@ -18,15 +19,19 @@ fn is_not_ident_char(c: char) -> bool {
     !is_ident_char(c)
 }
 
-#[derive(Copy, Clone)]
-pub struct Lexer<'s> {
+pub struct Lexer<'s, 'i> {
     text: &'s str,
+    interner: &'i mut Interner,
     line: usize,
 }
 
-impl<'s> Lexer<'s> {
-    pub fn new(text: &'s str) -> Self {
-        Self { text, line: 1 }
+impl<'s, 'i> Lexer<'s, 'i> {
+    pub fn new(text: &'s str, interner: &'i mut Interner) -> Self {
+        Self {
+            text,
+            interner,
+            line: 1,
+        }
     }
 
     pub fn line(&self) -> usize {
@@ -122,7 +127,7 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn try_read_keyword(&mut self) -> Result<Option<Token<'s>>> {
+    fn try_read_keyword(&mut self) -> Result<Option<Token>> {
         if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
         } else if self.try_strip_prefix("혹은") {
@@ -194,7 +199,7 @@ impl<'s> Lexer<'s> {
         }
     }
 
-    fn read_next(&mut self) -> Result<Token<'s>> {
+    fn read_next(&mut self) -> Result<Token> {
         if let Ok(Some(token)) = self.try_read_keyword() {
             return Ok(token);
         }
@@ -221,14 +226,16 @@ impl<'s> Lexer<'s> {
                     self.make_code_err("변수가 아닌 식별자는 숫자부터 시작할수 없습니다")
                 });
             } else {
-                return Ok(Token::Builtin(ident));
+                return Ok(Token::Builtin(self.interner.get_or_intern(ident)));
             }
         }
 
         if self.try_match_pop_byte(b'\'') {
-            self.read_str().map(Token::StrLit)
+            self.read_str()
+                .map(|s| Token::StrLit(self.interner.get_or_intern(s)))
         } else if self.try_match_pop_byte(b'$') {
-            Ok(Token::Variable(self.read_ident()))
+            let ident = self.read_ident();
+            Ok(Token::Variable(self.interner.get_or_intern(ident)))
         } else if self.try_match_pop_byte(b'{') {
             Ok(Token::OpenBrace)
         } else if self.try_match_pop_byte(b'}') {
@@ -255,10 +262,10 @@ impl<'s> Lexer<'s> {
     }
 }
 
-impl<'s> Iterator for Lexer<'s> {
-    type Item = Result<Spanned<'s>>;
+impl<'s, 'i> Iterator for Lexer<'s, 'i> {
+    type Item = Result<Spanned>;
 
-    fn next(&mut self) -> Option<Result<Spanned<'s>>> {
+    fn next(&mut self) -> Option<Result<Spanned>> {
         self.skip_ws();
 
         if self.text.is_empty() {
@@ -278,7 +285,10 @@ impl<'s> Iterator for Lexer<'s> {
 #[test]
 fn lex_test() {
     use pretty_assertions::assert_eq;
-    let mut ts = Lexer::new("@'ABC'");
+    let mut interner = Interner::default();
+    let abc = interner.get_or_intern("ABC");
+    let a = interner.get_or_intern("A");
+    let mut ts = Lexer::new("@'ABC'", &mut interner);
 
     macro_rules! next {
         () => {
@@ -287,22 +297,24 @@ fn lex_test() {
     }
 
     assert_eq!(next!(), Token::PrintLine,);
-    assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@!  A 'ABC'");
+    ts = Lexer::new("@!  A 'ABC'", &mut interner);
     assert_eq!(next!(), Token::PrintWait,);
-    assert_eq!(next!(), Token::Builtin("A"),);
-    assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert_eq!(next!(), Token::Builtin(a),);
+    assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@#foo\n A 'ABC'");
+    ts = Lexer::new("@#foo\n A 'ABC'", &mut interner);
     assert_eq!(next!(), Token::PrintLine,);
-    assert_eq!(next!(), Token::Builtin("A"),);
-    assert_eq!(next!(), Token::StrLit("ABC"),);
+    assert_eq!(next!(), Token::Builtin(a),);
+    assert_eq!(next!(), Token::StrLit(abc),);
 
-    ts = Lexer::new("$1 = 1 + 2");
-    assert_eq!(next!(), Token::Variable("1"));
+    let one = interner.get_or_intern("1");
+
+    ts = Lexer::new("$1 = 1 + 2", &mut interner);
+    assert_eq!(next!(), Token::Variable(one));
     assert_eq!(next!(), Token::Assign);
     assert_eq!(next!(), Token::IntLit(1));
     assert_eq!(next!(), Token::BinaryOp(BinaryOperator::Add));
