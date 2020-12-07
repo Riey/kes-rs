@@ -1,10 +1,6 @@
-use crate::interner::Interner;
+use crate::instruction::{Instruction, InstructionWithDebug};
 use crate::location::Location;
 use crate::{ast::Expr, ast::Stmt};
-use crate::{
-    error::ParseError,
-    instruction::{Instruction, InstructionWithDebug},
-};
 use arrayvec::ArrayVec;
 
 pub struct Compiler {
@@ -162,28 +158,19 @@ impl Compiler {
     }
 }
 
-pub fn compile(program: &[Stmt]) -> Vec<InstructionWithDebug> {
-    Compiler::new().compile(program)
-}
-
-pub fn compile_source(
-    source: &str,
-    interner: &mut Interner,
-) -> Result<Vec<InstructionWithDebug>, ParseError> {
-    Ok(compile(&crate::parser::parse(source, interner)?))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::compile_source;
+    use super::Compiler;
     use crate::interner::Interner;
     use crate::operator::TernaryOperator;
+    use crate::parser::parse;
     use crate::{instruction::Instruction, operator::BinaryOperator};
     use pretty_assertions::assert_eq;
 
     fn test_impl(source: &str, interner: &mut Interner, insts: &[Instruction]) {
-        let compiled = compile_source(source, interner)
-            .unwrap()
+        let ast = parse(source, interner).unwrap();
+        let compiled = Compiler::new()
+            .compile(&ast)
             .into_iter()
             .map(|i| i.inst)
             .collect::<Vec<_>>();
@@ -193,7 +180,7 @@ mod tests {
 
     #[test]
     fn simple() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         test_impl(
             "1 + 2;",
             &mut i,
@@ -208,7 +195,7 @@ mod tests {
 
     #[test]
     fn print() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         let foo = i.get_or_intern_static("123");
         test_impl(
             "@ 123 '123';",
@@ -226,7 +213,7 @@ mod tests {
 
     #[test]
     fn if_simple() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         test_impl(
             "만약 1 + 2 { 0; } 혹은 1 { 1; } 그외 { 2; }",
             &mut i,
@@ -251,7 +238,7 @@ mod tests {
 
     #[test]
     fn while_simple() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         test_impl(
             "반복 1 + 2 { 2; } 3;",
             &mut i,
@@ -271,7 +258,7 @@ mod tests {
 
     #[test]
     fn conditional() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         test_impl(
             "1 ? 2 : 3;",
             &mut i,
@@ -287,7 +274,7 @@ mod tests {
 
     #[test]
     fn builtin() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         let v = i.get_or_intern_static("변수");
         let f = i.get_or_intern_static("함수");
         test_impl(
@@ -307,7 +294,7 @@ mod tests {
 
     #[test]
     fn exit() {
-        let mut i = Interner::default();
+        let mut i = Interner::new();
         test_impl("종료;", &mut i, &[Instruction::Exit]);
     }
 }

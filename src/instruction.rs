@@ -3,8 +3,9 @@ use crate::{
     location::Location,
     operator::{BinaryOperator, TernaryOperator, UnaryOperator},
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
     Nop,
     Exit,
@@ -23,7 +24,7 @@ pub enum Instruction {
     GotoIfNot(u32),
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct InstructionWithDebug {
     pub inst: Instruction,
     pub location: Location,

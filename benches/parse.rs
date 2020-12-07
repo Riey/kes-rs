@@ -4,7 +4,7 @@ extern crate test;
 
 use test::Bencher;
 
-use kes::{compiler::compile, parser::parse, interner::Interner};
+use kes::{compiler::compile, interner::Interner, parser::parse};
 
 #[bench]
 pub fn parse_short(b: &mut Bencher) {

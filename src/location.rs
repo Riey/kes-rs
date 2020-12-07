@@ -1,4 +1,6 @@
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
     pub line: usize,
 }

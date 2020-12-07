@@ -23,7 +23,7 @@ mod tests {
         ($name:ident, $code:expr, [$(($sym:ident, $text:expr),)*], $program:expr) => {
             #[test]
             fn $name() {
-                let mut interner = Interner::default();
+                let mut interner = Interner::new();
 
                 let program = match parse($code, &mut interner) {
                     Ok(program) => program,

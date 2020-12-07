@@ -285,7 +285,7 @@ impl<'s, 'i> Iterator for Lexer<'s, 'i> {
 #[test]
 fn lex_test() {
     use pretty_assertions::assert_eq;
-    let mut interner = Interner::default();
+    let mut interner = Interner::new();
     let abc = interner.get_or_intern("ABC");
     let a = interner.get_or_intern("A");
     let mut ts = Lexer::new("@'ABC'", &mut interner);

@@ -1,8 +1,7 @@
 use kes::async_trait;
 use kes::builtin::Builtin;
-use kes::compiler::compile_source;
 use kes::context::Context;
-use kes::interner::Interner;
+use kes::program::Program;
 use kes::value::Value;
 
 pub struct StdioBuiltin;
@@ -29,10 +28,9 @@ impl Builtin for StdioBuiltin {
 }
 
 fn main() {
-    let mut interner = Interner::default();
-    let script = compile_source(include_str!("fib.kes"), &mut interner).unwrap();
+    let program = Program::from_source(include_str!("fib.kes")).unwrap();
 
-    let ctx = Context::new(&script, &interner);
+    let ctx = Context::new(&program);
 
     futures_executor::block_on(ctx.run(StdioBuiltin)).unwrap();
 }

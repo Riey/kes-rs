@@ -1,21 +1,22 @@
 use lalrpop_util::lalrpop_mod;
 
-pub mod ast;
+mod ast;
 pub mod builtin;
-pub mod compiler;
+mod compiler;
 pub mod context;
 pub mod error;
 lalrpop_mod!(
     #[allow(unused)]
     grammar
 );
-pub mod instruction;
-pub mod interner;
+mod instruction;
+mod interner;
 mod lexer;
 pub mod location;
-pub mod operator;
-pub mod parser;
-pub mod token;
+mod operator;
+mod parser;
+pub mod program;
+mod token;
 pub mod value;
 
 pub use async_trait::async_trait;
