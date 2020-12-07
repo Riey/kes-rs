@@ -8,8 +8,6 @@ pub enum Token<'s> {
     ElseIf,
     /// 그외
     Else,
-    /// 선택
-    Select,
     /// 종료
     Exit,
     /// 반복

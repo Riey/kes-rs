@@ -28,6 +28,7 @@ pub enum Stmt<'s> {
         expr: Expr<'s>,
         location: Location,
     },
+    Exit,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

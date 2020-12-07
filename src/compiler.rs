@@ -38,6 +38,7 @@ impl<'s> Compiler<'s> {
 
     fn compile_stmt(&mut self, stmt: &Stmt<'s>) {
         match stmt {
+            Stmt::Exit => self.push(Instruction::Exit),
             Stmt::Print {
                 values,
                 newline,
@@ -144,7 +145,7 @@ impl<'s> Compiler<'s> {
                 self.push_expr(mhs);
                 self.push_expr(rhs);
                 self.push(Instruction::TernaryOperator(*op));
-            },
+            }
         }
     }
 
@@ -280,7 +281,12 @@ mod tests {
                 Instruction::BinaryOperator(BinaryOperator::Add),
                 Instruction::CallBuiltin("함수"),
                 Instruction::Pop,
-            ]
+            ],
         );
+    }
+
+    #[test]
+    fn exit() {
+        test_impl("종료;", &[Instruction::Exit]);
     }
 }

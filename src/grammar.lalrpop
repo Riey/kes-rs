@@ -15,6 +15,7 @@ Body: Vec<Stmt<'s>> = {
 }
 
 Stmt: Stmt<'s> = {
+    "종료" ";" => Stmt::Exit,
     <location:@L> <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value, location },
     <location:@L> "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false, location },
     <location:@L> "PRINTL" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: false, location },
@@ -123,6 +124,7 @@ extern {
         "혹은" => Token::ElseIf,
         "그외" => Token::Else,
         "반복" => Token::While,
+        "종료" => Token::Exit,
         "PRINT" => Token::Print,
         "PRINTL" => Token::PrintLine,
         "PRINTW" => Token::PrintWait,

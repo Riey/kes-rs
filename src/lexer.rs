@@ -129,8 +129,6 @@ impl<'s> Lexer<'s> {
             Ok(Some(Token::ElseIf))
         } else if self.try_strip_prefix("그외") {
             Ok(Some(Token::Else))
-        } else if self.try_strip_prefix("선택") {
-            Ok(Some(Token::Select))
         } else if self.try_strip_prefix("종료") {
             Ok(Some(Token::Exit))
         } else if self.try_strip_prefix("반복") {
