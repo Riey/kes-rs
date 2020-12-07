@@ -133,7 +133,12 @@ impl<'s> Compiler<'s> {
                 self.push_expr(rhs);
                 self.push(Instruction::BinaryOperator(*op));
             }
-            Expr::TernaryOp { .. } => todo!(),
+            Expr::TernaryOp { lhs, mhs, rhs, op } => {
+                self.push_expr(lhs);
+                self.push_expr(mhs);
+                self.push_expr(rhs);
+                self.push(Instruction::TernaryOperator(*op));
+            },
         }
     }
 
@@ -160,6 +165,7 @@ pub fn compile_source<'s>(source: &'s str) -> Result<Vec<InstructionWithDebug<'s
 #[cfg(test)]
 mod tests {
     use super::compile_source;
+    use crate::operator::TernaryOperator;
     use crate::{instruction::Instruction, operator::BinaryOperator};
     use pretty_assertions::assert_eq;
 
@@ -239,6 +245,20 @@ mod tests {
                 Instruction::LoadInt(3),
                 Instruction::Pop,
             ],
-        )
+        );
+    }
+
+    #[test]
+    fn conditional() {
+        test_impl(
+            "1 ? 2 : 3;",
+            &[
+                Instruction::LoadInt(1),
+                Instruction::LoadInt(2),
+                Instruction::LoadInt(3),
+                Instruction::TernaryOperator(TernaryOperator::Conditional),
+                Instruction::Pop,
+            ],
+        );
     }
 }

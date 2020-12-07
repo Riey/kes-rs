@@ -3,7 +3,7 @@ use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::instruction::InstructionWithDebug;
 use crate::location::Location;
-use crate::operator::BinaryOperator;
+use crate::operator::{BinaryOperator, TernaryOperator};
 use crate::value::{Value, ValueConvertError};
 use ahash::AHashMap;
 use std::convert::{TryFrom, TryInto};
@@ -259,7 +259,7 @@ impl<'c> Context<'c> {
             Instruction::Pop => {
                 self.pop();
             }
-            Instruction::Conditional => {
+            Instruction::TernaryOperator(TernaryOperator::Conditional) => {
                 let rhs = self.pop_ret()?;
                 let lhs = self.pop_ret()?;
                 let cond = self.pop_bool();

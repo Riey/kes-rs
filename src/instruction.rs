@@ -1,6 +1,6 @@
 use crate::{
     location::Location,
-    operator::{BinaryOperator, UnaryOperator},
+    operator::{BinaryOperator, TernaryOperator, UnaryOperator},
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -9,7 +9,6 @@ pub enum Instruction<'s> {
     Exit,
     Pop,
     Duplicate,
-    Conditional,
     LoadInt(u32),
     LoadStr(&'s str),
     LoadVar(&'s str),
@@ -19,6 +18,7 @@ pub enum Instruction<'s> {
     Print { newline: bool, wait: bool },
     BinaryOperator(BinaryOperator),
     UnaryOperator(UnaryOperator),
+    TernaryOperator(TernaryOperator),
     Goto(u32),
     GotoIfNot(u32),
 }
