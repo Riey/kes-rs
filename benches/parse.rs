@@ -2,8 +2,8 @@
 
 extern crate test;
 
-use test::Bencher;
 use kes::program::Program;
+use test::Bencher;
 
 #[bench]
 pub fn compile_long(b: &mut Bencher) {
