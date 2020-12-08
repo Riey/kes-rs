@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
@@ -8,5 +9,11 @@ pub struct Location {
 impl Location {
     pub fn new(line: usize) -> Self {
         Self { line }
+    }
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "L{}", self.line)
     }
 }

@@ -5,6 +5,10 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait Builtin: Send {
     async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Value;
+    #[allow(unused_variables)]
+    fn load(&mut self, name: &str) -> Option<Value> {
+        None
+    }
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
     async fn wait(&mut self);
@@ -15,6 +19,9 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
     async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Value {
         (**self).run(name, ctx).await
+    }
+    fn load(&mut self, name: &str) -> Option<Value> {
+        (**self).load(name)
     }
     #[inline]
     fn print(&mut self, v: Value) {
@@ -53,6 +60,11 @@ impl Builtin for RecordBuiltin {
     async fn run(&mut self, name: &str, _ctx: &mut Context<'_>) -> Value {
         self.0.push_str(name);
         Value::Int(0)
+    }
+    fn load(&mut self, name: &str) -> Option<Value> {
+        use std::fmt::Write;
+        write!(self.0, "${}", name).unwrap();
+        None
     }
     #[inline]
     fn print(&mut self, v: Value) {

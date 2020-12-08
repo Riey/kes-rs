@@ -217,8 +217,9 @@ impl<'c> Context<'c> {
                 let item = self
                     .variables
                     .get(&name)
-                    .ok_or(self.make_err("변수를 찾을수 없습니다"))?
-                    .clone();
+                    .cloned()
+                    .or_else(|| builtin.load(self.program.resolve(name).unwrap()))
+                    .ok_or(self.make_err("변수를 찾을수 없습니다"))?;
                 self.push(item);
             }
             Instruction::StoreVar(name) => {

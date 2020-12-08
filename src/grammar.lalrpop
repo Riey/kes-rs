@@ -103,12 +103,18 @@ CallExpr: Expr = {
 
 #[inline]
 CallArgs: Vec<Expr> = {
-    "(" <Arg*> ")" => <>,
+    "(" <args:Arg*> <last:Expr?> ")" => {
+        let mut args = args;
+        if let Some(last) = last {
+            args.push(last);
+        }
+        args
+    },
 }
 
 #[inline]
 Arg: Expr = {
-    <Expr> ","? => <>,
+    <Expr> "," => <>,
 }
 
 Term: Expr = {
