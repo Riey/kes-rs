@@ -5,17 +5,17 @@ use crate::location::Location;
 use crate::error::LexicalError;
 use crate::interner::Symbol;
 
-grammar;
+grammar<'s>;
 
-pub Program: Vec<Stmt> = {
+pub Program: Vec<Stmt<'s>> = {
     Body,
 };
 
-Body: Vec<Stmt> = {
+Body: Vec<Stmt<'s>> = {
     <stmts: Stmt*> => stmts,
 }
 
-Stmt: Stmt = {
+Stmt: Stmt<'s> = {
     "종료" ";" => Stmt::Exit,
     <location:@L> <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value, location },
     <location:@L> "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false, location },
@@ -32,14 +32,15 @@ Stmt: Stmt = {
     },
     <location:@L> "반복" <cond:Expr> "{" <body:Body> "}" => Stmt::While { cond, body, location },
     <location:@L> <expr:Expr> ";" => Stmt::Expression { expr, location },
+    <comment> => Stmt::Comment(<>),
     <Stmt> ";" => <>,
 }
 
-ElseIfStmt: (Expr, Vec<Stmt>) = {
+ElseIfStmt: (Expr, Vec<Stmt<'s>>) = {
     "혹은" <cond:Expr> "{" <body:Body> "}" => (cond, body),
 }
 
-ElseStmt: Vec<Stmt> = {
+ElseStmt: Vec<Stmt<'s>> = {
     "그외" "{" <body:Body> "}" => body,
 }
 
@@ -121,7 +122,7 @@ extern {
     type Location = Location;
     type Error = LexicalError;
 
-    enum Token {
+    enum Token<'s> {
         "만약" => Token::If,
         "혹은" => Token::ElseIf,
         "그외" => Token::Else,
@@ -160,6 +161,7 @@ extern {
         "=" => Token::Assign,
         ";" => Token::SemiColon,
         "," => Token::Comma,
+        comment => Token::Comment(<&'s str>),
         built => Token::Builtin(<Symbol>),
         number => Token::IntLit(<u32>),
         string => Token::StrLit(<Symbol>),

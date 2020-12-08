@@ -35,6 +35,7 @@ impl Compiler {
 
     fn compile_stmt(&mut self, stmt: &Stmt) {
         match stmt {
+            Stmt::Comment(_) => {}
             Stmt::Exit => self.push(Instruction::Exit),
             Stmt::Print {
                 values,

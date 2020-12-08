@@ -4,7 +4,7 @@ use crate::location::Location;
 use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 use crate::token::Token;
 
-pub type Spanned = (Location, Token, Location);
+pub type Spanned<'s> = (Location, Token<'s>, Location);
 
 fn is_ident_char(c: char) -> bool {
     match c {
@@ -120,7 +120,7 @@ impl<'s, 'i> Lexer<'s, 'i> {
         }
     }
 
-    fn try_read_keyword(&mut self) -> Result<Option<Token>> {
+    fn try_read_keyword(&mut self) -> Result<Option<Token<'s>>> {
         if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
         } else if self.try_strip_prefix("혹은") {
@@ -192,7 +192,19 @@ impl<'s, 'i> Lexer<'s, 'i> {
         }
     }
 
-    fn read_next(&mut self) -> Result<Token> {
+    fn read_next(&mut self) -> Result<Token<'s>> {
+        if self.try_match_pop_byte(b'#') {
+            let pos = memchr::memchr(b'\n', self.text.as_bytes()).unwrap_or(self.text.len());
+            let (comment, other) = unsafe {
+                (
+                    self.text.get_unchecked(..pos),
+                    self.text.get_unchecked(pos..),
+                )
+            };
+            self.text = other;
+            return Ok(Token::Comment(comment));
+        }
+
         if let Ok(Some(token)) = self.try_read_keyword() {
             return Ok(token);
         }
@@ -256,9 +268,9 @@ impl<'s, 'i> Lexer<'s, 'i> {
 }
 
 impl<'s, 'i> Iterator for Lexer<'s, 'i> {
-    type Item = Result<Spanned>;
+    type Item = Result<Spanned<'s>>;
 
-    fn next(&mut self) -> Option<Result<Spanned>> {
+    fn next(&mut self) -> Option<Result<Spanned<'s>>> {
         self.skip_ws();
 
         if self.text.is_empty() {
@@ -293,27 +305,25 @@ fn lex_test() {
     assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@!  A 'ABC';", &mut interner);
+    ts = Lexer::new("@!  A 'ABC'", &mut interner);
     assert_eq!(next!(), Token::PrintWait,);
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
-    assert_eq!(next!(), Token::SemiColon,);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@ A 'ABC';", &mut interner);
+    ts = Lexer::new("@#foo\n A 'ABC'", &mut interner);
     assert_eq!(next!(), Token::PrintLine,);
+    assert_eq!(next!(), Token::Comment("foo"));
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
-    assert_eq!(next!(), Token::SemiColon,);
 
     let one = interner.get_or_intern("1");
 
-    ts = Lexer::new("$1 = 1 + 2;", &mut interner);
+    ts = Lexer::new("$1 = 1 + 2", &mut interner);
     assert_eq!(next!(), Token::Variable(one));
     assert_eq!(next!(), Token::Assign);
     assert_eq!(next!(), Token::IntLit(1));
     assert_eq!(next!(), Token::BinaryOp(BinaryOperator::Add));
     assert_eq!(next!(), Token::IntLit(2));
-    assert_eq!(next!(), Token::SemiColon,);
     assert!(ts.text.is_empty());
 }

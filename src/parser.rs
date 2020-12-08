@@ -3,7 +3,7 @@ use crate::error::ParseError;
 use crate::interner::Interner;
 use crate::lexer::Lexer;
 
-pub fn parse(s: &str, interner: &mut Interner) -> Result<Vec<Stmt>, ParseError> {
+pub fn parse<'s>(s: &'s str, interner: &mut Interner) -> Result<Vec<Stmt<'s>>, ParseError<'s>> {
     let lexer = Lexer::new(s, interner);
     crate::grammar::ProgramParser::new().parse(lexer)
 }

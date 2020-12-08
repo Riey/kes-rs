@@ -8,15 +8,15 @@ use std::io::{self, Write};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum FormatError {
+pub enum FormatError<'s> {
     #[error("파싱에러: {0:?}")]
-    ParseError(ParseError),
+    ParseError(ParseError<'s>),
     #[error("IO 에러: {0}")]
     IoError(#[from] io::Error),
 }
 
-impl From<ParseError> for FormatError {
-    fn from(err: ParseError) -> Self {
+impl<'s> From<ParseError<'s>> for FormatError<'s> {
+    fn from(err: ParseError<'s>) -> Self {
         FormatError::ParseError(err)
     }
 }
@@ -229,6 +229,9 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 self.write_stmt_block(body)?;
                 self.o.write_all(b"}\n\n")?;
             }
+            Stmt::Comment(comment) => {
+                writeln!(self.o, "#{}", comment)?;
+            }
             Stmt::Print {
                 newline,
                 wait,
@@ -294,11 +297,37 @@ pub fn format_code_to_string(code: &str) -> Result<String, FormatError> {
     Ok(String::from_utf8(out).unwrap())
 }
 
-#[test]
-fn simple() {
+#[cfg(test)]
+mod tests {
+    use super::format_code_to_string;
+    use crate::builtin::RecordBuiltin;
+    use crate::context::Context;
+    use crate::program::Program;
+    use futures_executor::block_on;
+
     use pretty_assertions::assert_eq;
-    assert_eq!(
-        format_code_to_string("$1=2;만약1+2{123;}@!456;").unwrap(),
-        "$1 = 2;\n만약 1 + 2 {\n    123;\n}\n\n@! 456 ;\n"
-    );
+    #[test]
+    fn simple() {
+        assert_eq!(
+            format_code_to_string("$1=2;만약1+2{123;}@!456;").unwrap(),
+            "$1 = 2;\n\n만약 1 + 2 {\n    123;\n}\n\n@!456;\n"
+        );
+    }
+
+    #[test]
+    fn work() {
+        let code = "$1=2;만약1+2{123;}@!456;";
+        let formatted_code = format_code_to_string(code).unwrap();
+
+        let mut ori_builtin = RecordBuiltin::new();
+        let mut for_builtin = RecordBuiltin::new();
+
+        block_on(Context::new(&Program::from_source(code).unwrap()).run(&mut ori_builtin)).unwrap();
+        block_on(
+            Context::new(&Program::from_source(&formatted_code).unwrap()).run(&mut for_builtin),
+        )
+        .unwrap();
+
+        assert_eq!(ori_builtin.text(), for_builtin.text());
+    }
 }

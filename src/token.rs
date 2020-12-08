@@ -2,7 +2,7 @@ use crate::interner::Symbol;
 use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Token {
+pub enum Token<'a> {
     /// 만약
     If,
     /// 혹은
@@ -30,6 +30,9 @@ pub enum Token {
 
     /// ? :
     TernaryOp(TernaryOperator, bool),
+
+    /// \# Comment
+    Comment(&'a str),
 
     /// {
     OpenBrace,

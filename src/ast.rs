@@ -2,7 +2,7 @@ use crate::operator::{BinaryOperator, UnaryOperator};
 use crate::{interner::Symbol, location::Location, operator::TernaryOperator};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Stmt {
+pub enum Stmt<'s> {
     Assign {
         var: Symbol,
         value: Expr,
@@ -15,19 +15,20 @@ pub enum Stmt {
         location: Location,
     },
     If {
-        arms: Vec<(Expr, Vec<Stmt>)>,
-        other: Vec<Stmt>,
+        arms: Vec<(Expr, Vec<Stmt<'s>>)>,
+        other: Vec<Stmt<'s>>,
         location: Location,
     },
     While {
         cond: Expr,
-        body: Vec<Stmt>,
+        body: Vec<Stmt<'s>>,
         location: Location,
     },
     Expression {
         expr: Expr,
         location: Location,
     },
+    Comment(&'s str),
     Exit,
 }
 
