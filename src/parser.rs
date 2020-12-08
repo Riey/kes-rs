@@ -62,7 +62,7 @@ mod tests {
 
     make_test!(
         print,
-        "@ '123' 123;",
+        "@@'123' 123;",
         [(text, "123"),],
         [Stmt::Print {
             values: vec![Expr::String(text), Expr::Number(123)],

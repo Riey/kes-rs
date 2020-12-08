@@ -251,11 +251,11 @@ impl<'s, 'i> Lexer<'s, 'i> {
             Ok(Token::CloseParan)
         } else if self.try_match_pop_byte(b'@') {
             if self.try_match_pop_byte(b'@') {
-                Ok(Token::Print)
+                Ok(Token::PrintLine)
             } else if self.try_match_pop_byte(b'!') {
                 Ok(Token::PrintWait)
             } else {
-                Ok(Token::PrintLine)
+                Ok(Token::Print)
             }
         } else if self.try_match_pop_byte(b';') {
             Ok(Token::SemiColon)
@@ -301,7 +301,7 @@ fn lex_test() {
         };
     }
 
-    assert_eq!(next!(), Token::PrintLine,);
+    assert_eq!(next!(), Token::Print,);
     assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
@@ -311,9 +311,7 @@ fn lex_test() {
     assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@#foo\n A 'ABC'", &mut interner);
-    assert_eq!(next!(), Token::PrintLine,);
-    assert_eq!(next!(), Token::Comment("foo"));
+    assert_eq!(next!(), Token::Print,);
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
 

@@ -43,11 +43,11 @@ pub enum Token<'a> {
     /// )
     CloseParan,
 
-    /// @@
+    /// @
     Print,
     /// @!
     PrintWait,
-    /// @
+    /// @@
     PrintLine,
 
     /// ;
