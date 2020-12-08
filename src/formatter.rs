@@ -1,22 +1,23 @@
-use crate::ast::Expr;
 use crate::error::ParseError;
 use crate::interner::Symbol;
-use crate::parser::parse;
+use crate::parser::parse_with_comments;
+use crate::{ast::Expr, location::Location};
 use crate::{ast::Stmt, interner::Interner};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{self, Write};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum FormatError<'s> {
+pub enum FormatError {
     #[error("파싱에러: {0:?}")]
-    ParseError(ParseError<'s>),
+    ParseError(ParseError),
     #[error("IO 에러: {0}")]
     IoError(#[from] io::Error),
 }
 
-impl<'s> From<ParseError<'s>> for FormatError<'s> {
-    fn from(err: ParseError<'s>) -> Self {
+impl<'s> From<ParseError> for FormatError {
+    fn from(err: ParseError) -> Self {
         FormatError::ParseError(err)
     }
 }
@@ -135,13 +136,17 @@ impl<'a> fmt::Display for ExprDisplay<'a> {
 struct CodeFormatter<'a, W: Write> {
     o: IndentWriter<W>,
     interner: &'a Interner,
+    comments: &'a BTreeMap<Location, &'a str>,
+    last_location: Location,
 }
 
 impl<'a, W: Write> CodeFormatter<'a, W> {
-    pub fn new(out: W, interner: &'a Interner) -> Self {
+    pub fn new(out: W, interner: &'a Interner, comments: &'a BTreeMap<Location, &'a str>) -> Self {
         Self {
             o: IndentWriter::new(out),
             interner,
+            comments,
+            last_location: Location::new(0),
         }
     }
 
@@ -164,6 +169,23 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
     }
 
     pub fn write_stmt(&mut self, stmt: &Stmt) -> io::Result<()> {
+        let mut write_comments = {
+            let location = stmt.location();
+            let comments = self.comments;
+            let o = &mut self.o;
+            let last_location = self.last_location;
+            self.last_location = location;
+            move |is_block: bool| -> io::Result<()> {
+                if is_block {
+                    o.write_all(b"\n")?;
+                }
+                for (_, comment) in comments.range(last_location..=location) {
+                    writeln!(o, "#{}", comment)?;
+                }
+                Ok(())
+            }
+        };
+
         let interner = self.interner;
 
         macro_rules! res {
@@ -174,6 +196,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
 
         match stmt {
             Stmt::Assign { var, value, .. } => {
+                write_comments(false)?;
                 writeln!(
                     self.o,
                     "${} = {};",
@@ -184,10 +207,12 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                     }
                 )?;
             }
-            Stmt::Exit => writeln!(self.o, "종료;")?,
+            Stmt::Exit { .. } => {
+                write_comments(false)?;
+                writeln!(self.o, "종료;")?;
+            }
             Stmt::If { arms, other, .. } => {
-                self.o.write_all(b"\n")?;
-
+                write_comments(true)?;
                 let mut first = true;
                 for (cond, body) in arms.iter() {
                     if first {
@@ -217,7 +242,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 self.o.write_all(b"\n\n")?;
             }
             Stmt::While { cond, body, .. } => {
-                self.o.write_all(b"\n")?;
+                write_comments(true)?;
                 writeln!(
                     self.o,
                     "반복 {} {{",
@@ -229,15 +254,14 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 self.write_stmt_block(body)?;
                 self.o.write_all(b"}\n\n")?;
             }
-            Stmt::Comment(comment) => {
-                writeln!(self.o, "#{}", comment)?;
-            }
             Stmt::Print {
                 newline,
                 wait,
                 values,
                 ..
             } => {
+                write_comments(false)?;
+
                 let prefix = if *wait {
                     "@!"
                 } else if *newline {
@@ -266,6 +290,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 writeln!(self.o, ";")?;
             }
             Stmt::Expression { expr, .. } => {
+                write_comments(false)?;
                 writeln!(self.o, "{};", ExprDisplay { expr, interner })?;
             }
         }
@@ -274,19 +299,13 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
     }
 }
 
-pub fn format_program(
-    program: &[Stmt],
-    interner: &Interner,
-    out: impl Write,
-) -> Result<(), io::Error> {
-    CodeFormatter::new(out, interner).write_program(program)
-}
-
 pub fn format_code(code: &str, out: impl Write) -> Result<(), FormatError> {
     let mut interner = Interner::new();
-    let program = parse(code, &mut interner)?;
+    let (program, comments) = parse_with_comments(code, &mut interner)?;
 
-    format_program(&program, &interner, out).map_err(FormatError::IoError)
+    CodeFormatter::new(out, &interner, &comments)
+        .write_program(&program)
+        .map_err(FormatError::IoError)
 }
 
 pub fn format_code_to_string(code: &str) -> Result<String, FormatError> {
@@ -309,8 +328,8 @@ mod tests {
     #[test]
     fn simple() {
         assert_eq!(
-            format_code_to_string("$1=2;만약1+2{123;}@!456;").unwrap(),
-            "$1 = 2;\n\n만약 1 + 2 {\n    123;\n}\n\n@!456;\n"
+            format_code_to_string("#12\n$1=2;#123\n만약1+2{123;}@!456;").unwrap(),
+            "#12\n$1 = 2;\n\n#123\n만약 1 + 2 {\n    123;\n}\n\n@!456;\n"
         );
     }
 

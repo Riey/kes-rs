@@ -1,11 +1,23 @@
-use crate::ast::Stmt;
 use crate::error::ParseError;
 use crate::interner::Interner;
-use crate::lexer::Lexer;
+use crate::lexer::{IgnoreComment, Lexer, StoreComment};
+use crate::{ast::Stmt, location::Location};
+use std::collections::BTreeMap;
 
-pub fn parse<'s>(s: &'s str, interner: &mut Interner) -> Result<Vec<Stmt<'s>>, ParseError<'s>> {
-    let lexer = Lexer::new(s, interner);
+pub fn parse(s: &str, interner: &mut Interner) -> Result<Vec<Stmt>, ParseError> {
+    let lexer = Lexer::new(s, interner, IgnoreComment);
     crate::grammar::ProgramParser::new().parse(lexer)
+}
+
+pub fn parse_with_comments<'s>(
+    s: &'s str,
+    interner: &mut Interner,
+) -> Result<(Vec<Stmt>, BTreeMap<Location, &'s str>), ParseError> {
+    let mut comment_handler = StoreComment::new();
+    let lexer = Lexer::new(s, interner, &mut comment_handler);
+    crate::grammar::ProgramParser::new()
+        .parse(lexer)
+        .map(|program| (program, comment_handler.into_comments()))
 }
 
 #[cfg(test)]

@@ -3,18 +3,18 @@ use crate::token::Token;
 use std::fmt::{self, Debug, Formatter};
 use thiserror::Error;
 
-pub type ParseError<'s> = lalrpop_util::ParseError<Location, Token<'s>, LexicalError>;
+pub type ParseError = lalrpop_util::ParseError<Location, Token, LexicalError>;
 
 #[derive(Clone, Error)]
 pub enum LexicalError {
-    #[error("코드해석중 {1}번째 줄에서 에러가 발생했습니다 `{0}`")]
-    InvalidCode(&'static str, usize),
-    #[error("잘못된 문자 `{0}`가 {1}번째 줄에서 발견됐습니다")]
-    InvalidChar(char, usize),
-    #[error("예상치 못한 토큰 `{0}`가 {1}번째 줄에서 발견됐습니다")]
-    UnexpectedToken(String, usize),
-    #[error("컴파일중 {1}번째 줄에서 에러가 발생했습니다 `{0}`")]
-    CompileError(String, usize),
+    #[error("코드해석중 {1}에서 에러가 발생했습니다 `{0}`")]
+    InvalidCode(&'static str, Location),
+    #[error("잘못된 문자 `{0}`가 {1}에서 발견됐습니다")]
+    InvalidChar(char, Location),
+    #[error("예상치 못한 토큰 `{0}`가 {1}에서 발견됐습니다")]
+    UnexpectedToken(String, Location),
+    #[error("컴파일중 {1}에서 에러가 발생했습니다 `{0}`")]
+    CompileError(String, Location),
     #[error("예상치 못하게 코드가 끝났습니다")]
     UnexpectedEndOfToken,
 }

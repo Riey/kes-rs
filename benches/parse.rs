@@ -67,14 +67,12 @@ pub fn deserialize_bytecode_long(b: &mut Bencher) {
 #[bench]
 pub fn format_long(b: &mut Bencher) {
     let input = get_long_code();
-    let mut interner = Interner::new();
     b.bytes += input.len() as u64;
 
     let mut out = Vec::new();
-    let program = kes::parser::parse(&input, &mut interner).unwrap();
 
     b.iter(|| {
-        kes::formatter::format_program(&program, &interner, &mut out).unwrap();
+        kes::formatter::format_code(&input, &mut out).unwrap();
         out.clear();
     })
 }

@@ -35,8 +35,10 @@ impl Compiler {
 
     fn compile_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::Comment(_) => {}
-            Stmt::Exit => self.push(Instruction::Exit),
+            Stmt::Exit { location } => {
+                self.location = *location;
+                self.push(Instruction::Exit);
+            }
             Stmt::Print {
                 values,
                 newline,
@@ -199,7 +201,7 @@ mod tests {
         let mut i = Interner::new();
         let foo = i.get_or_intern_static("123");
         test_impl(
-            "@ 123 '123';",
+            "@@123 '123';",
             &mut i,
             &[
                 Instruction::LoadInt(123),
@@ -210,6 +212,16 @@ mod tests {
                 },
             ],
         )
+    }
+
+    #[test]
+    fn comment() {
+        let mut i = Interner::new();
+        test_impl(
+            "  #----\n  123;",
+            &mut i,
+            &[Instruction::LoadInt(123), Instruction::Pop],
+        );
     }
 
     #[test]

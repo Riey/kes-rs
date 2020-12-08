@@ -3,8 +3,9 @@ use crate::interner::Interner;
 use crate::location::Location;
 use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 use crate::token::Token;
+use std::collections::BTreeMap;
 
-pub type Spanned<'s> = (Location, Token<'s>, Location);
+pub type Spanned = (Location, Token, Location);
 
 fn is_ident_char(c: char) -> bool {
     match c {
@@ -19,23 +20,55 @@ fn is_not_ident_char(c: char) -> bool {
     !is_ident_char(c)
 }
 
-pub struct Lexer<'s, 'i> {
+pub trait CommentHandler<'s> {
+    fn add_comment(&mut self, location: Location, comment: &'s str);
+}
+
+pub struct IgnoreComment;
+
+impl<'s> CommentHandler<'s> for IgnoreComment {
+    #[inline]
+    fn add_comment(&mut self, _location: Location, _comment: &'s str) {}
+}
+
+pub struct StoreComment<'s>(BTreeMap<Location, &'s str>);
+
+impl<'s> StoreComment<'s> {
+    pub fn new() -> Self {
+        Self(BTreeMap::new())
+    }
+
+    pub fn into_comments(self) -> BTreeMap<Location, &'s str> {
+        self.0
+    }
+}
+
+impl<'a, 's> CommentHandler<'s> for &'a mut StoreComment<'s> {
+    fn add_comment(&mut self, location: Location, comment: &'s str) {
+        self.0.insert(location, comment);
+    }
+}
+
+pub struct Lexer<'s, 'i, C: CommentHandler<'s>> {
     text: &'s str,
     interner: &'i mut Interner,
     line: usize,
+    comment_handler: C,
 }
 
-impl<'s, 'i> Lexer<'s, 'i> {
-    pub fn new(text: &'s str, interner: &'i mut Interner) -> Self {
+impl<'s, 'i, C: CommentHandler<'s>> Lexer<'s, 'i, C> {
+    pub fn new(text: &'s str, interner: &'i mut Interner, comment_handler: C) -> Self {
         Self {
             text,
             interner,
             line: 1,
+            comment_handler,
         }
     }
 
-    pub fn line(&self) -> usize {
-        self.line
+    #[inline]
+    pub fn location(&self) -> Location {
+        Location::new(self.line)
     }
 
     fn skip_ws(&mut self) {
@@ -45,6 +78,14 @@ impl<'s, 'i> Lexer<'s, 'i> {
                 b' ' | b'\t' | b'\r' => {}
                 b'\n' => {
                     self.line += 1;
+                }
+                b'#' => {
+                    let slice = bytes.as_slice();
+                    let pos = memchr::memchr(b'\n', slice).unwrap_or(slice.len());
+                    let comment =
+                        unsafe { std::str::from_utf8_unchecked(slice.get_unchecked(..pos)) };
+                    self.comment_handler.add_comment(self.location(), comment);
+                    bytes = unsafe { slice.get_unchecked(pos..) }.iter();
                 }
                 _ => {
                     self.text = unsafe {
@@ -61,12 +102,12 @@ impl<'s, 'i> Lexer<'s, 'i> {
 
     #[inline]
     fn make_code_err(&self, msg: &'static str) -> LexicalError {
-        LexicalError::InvalidCode(msg, self.line())
+        LexicalError::InvalidCode(msg, self.location())
     }
 
     #[inline]
     fn make_char_err(&self, ch: char) -> LexicalError {
-        LexicalError::InvalidChar(ch, self.line())
+        LexicalError::InvalidChar(ch, self.location())
     }
 
     #[inline]
@@ -120,7 +161,7 @@ impl<'s, 'i> Lexer<'s, 'i> {
         }
     }
 
-    fn try_read_keyword(&mut self) -> Result<Option<Token<'s>>> {
+    fn try_read_keyword(&mut self) -> Result<Option<Token>> {
         if self.try_strip_prefix("만약") {
             Ok(Some(Token::If))
         } else if self.try_strip_prefix("혹은") {
@@ -192,19 +233,7 @@ impl<'s, 'i> Lexer<'s, 'i> {
         }
     }
 
-    fn read_next(&mut self) -> Result<Token<'s>> {
-        if self.try_match_pop_byte(b'#') {
-            let pos = memchr::memchr(b'\n', self.text.as_bytes()).unwrap_or(self.text.len());
-            let (comment, other) = unsafe {
-                (
-                    self.text.get_unchecked(..pos),
-                    self.text.get_unchecked(pos..),
-                )
-            };
-            self.text = other;
-            return Ok(Token::Comment(comment));
-        }
-
+    fn read_next(&mut self) -> Result<Token> {
         if let Ok(Some(token)) = self.try_read_keyword() {
             return Ok(token);
         }
@@ -267,18 +296,18 @@ impl<'s, 'i> Lexer<'s, 'i> {
     }
 }
 
-impl<'s, 'i> Iterator for Lexer<'s, 'i> {
-    type Item = Result<Spanned<'s>>;
+impl<'s, 'i, C: CommentHandler<'s>> Iterator for Lexer<'s, 'i, C> {
+    type Item = Result<Spanned>;
 
-    fn next(&mut self) -> Option<Result<Spanned<'s>>> {
+    fn next(&mut self) -> Option<Result<Spanned>> {
         self.skip_ws();
 
         if self.text.is_empty() {
             None
         } else {
-            let start = Location::new(self.line());
+            let start = self.location();
             let token = self.read_next();
-            let end = Location::new(self.line());
+            let end = self.location();
 
             let triple = token.map(|token| (start, token, end));
 
@@ -293,7 +322,7 @@ fn lex_test() {
     let mut interner = Interner::new();
     let abc = interner.get_or_intern("ABC");
     let a = interner.get_or_intern("A");
-    let mut ts = Lexer::new("@'ABC'", &mut interner);
+    let mut ts = Lexer::new("@'ABC'", &mut interner, IgnoreComment);
 
     macro_rules! next {
         () => {
@@ -305,19 +334,20 @@ fn lex_test() {
     assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@!  A 'ABC'", &mut interner);
+    ts = Lexer::new("@!  A 'ABC'", &mut interner, IgnoreComment);
     assert_eq!(next!(), Token::PrintWait,);
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
+    ts = Lexer::new("  #--foo\n@ A 'ABC'", &mut interner, IgnoreComment);
     assert_eq!(next!(), Token::Print,);
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
 
     let one = interner.get_or_intern("1");
 
-    ts = Lexer::new("$1 = 1 + 2", &mut interner);
+    ts = Lexer::new("$1 = 1 + 2", &mut interner, IgnoreComment);
     assert_eq!(next!(), Token::Variable(one));
     assert_eq!(next!(), Token::Assign);
     assert_eq!(next!(), Token::IntLit(1));
