@@ -20,7 +20,8 @@ Stmt: Stmt = {
     <location:@L> <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value, location },
     <location:@L> "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false, location },
     <location:@L> "PRINTL" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: false, location },
-    <location:@L> "만약" <cond:Expr> "{" <body:Body> "}" <elseifstmts:ElseIfStmt*> <elsestmt:ElseStmt?> => { 
+    <location:@L> "PRINTW" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: true, location },
+    <location:@L> "만약" <cond:Expr> "{" <body:Body> "}" <elseifstmts:ElseIfStmt*> <elsestmt:ElseStmt?> => {
         let mut arms = elseifstmts;
         arms.insert(0, (cond, body));
         Stmt::If {

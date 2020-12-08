@@ -1,3 +1,4 @@
+use crate::ast::Stmt;
 use crate::compiler::Compiler;
 use crate::error::ParseError;
 use crate::instruction::InstructionWithDebug;
@@ -12,14 +13,18 @@ pub struct Program {
 }
 
 impl Program {
+    pub fn from_ast(program: &[Stmt], interner: Interner) -> Self {
+        Self {
+            interner,
+            instructions: Compiler::new().compile(program),
+        }
+    }
+
     pub fn from_source(source: &str) -> Result<Self, ParseError> {
         let mut interner = Interner::new();
         let ast = parse(source, &mut interner)?;
 
-        Ok(Self {
-            interner,
-            instructions: Compiler::new().compile(&ast),
-        })
+        Ok(Self::from_ast(&ast, interner))
     }
 
     #[inline]
