@@ -91,7 +91,7 @@ impl<'a> fmt::Display for ExprDisplay<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.expr {
             Expr::Number(num) => write!(f, "{}", num),
-            Expr::String(sym) => write!(f, "{}", self.resolve(*sym)),
+            Expr::String(sym) => write!(f, "'{}'", self.resolve(*sym)),
             Expr::Variable(sym) => write!(f, "${}", self.resolve(*sym)),
             Expr::BuiltinFunc { name, args } => {
                 write!(f, "{}(", self.resolve(*name))?;
@@ -186,6 +186,8 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
             }
             Stmt::Exit => writeln!(self.o, "종료;")?,
             Stmt::If { arms, other, .. } => {
+                self.o.write_all(b"\n")?;
+
                 let mut first = true;
                 for (cond, body) in arms.iter() {
                     if first {
@@ -212,9 +214,10 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                     write!(self.o, "}}")?;
                 }
 
-                write!(self.o, "\n\n")?;
+                self.o.write_all(b"\n\n")?;
             }
             Stmt::While { cond, body, .. } => {
+                self.o.write_all(b"\n")?;
                 writeln!(
                     self.o,
                     "반복 {} {{",
@@ -224,7 +227,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                     }
                 )?;
                 self.write_stmt_block(body)?;
-                write!(self.o, "}}\n\n")?;
+                self.o.write_all(b"}\n\n")?;
             }
             Stmt::Print {
                 newline,
@@ -233,24 +236,28 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 ..
             } => {
                 let prefix = if *wait {
-                    "@! "
+                    "@!"
                 } else if *newline {
-                    "@ "
+                    "@"
                 } else {
-                    "@@ "
+                    "@@"
                 };
 
                 self.o.write_all(prefix.as_bytes())?;
 
-                for value in values.iter() {
+                for (idx, value) in values.iter().enumerate() {
                     write!(
                         self.o,
-                        "{} ",
+                        "{}",
                         ExprDisplay {
                             expr: value,
                             interner
                         }
                     )?;
+
+                    if idx != values.len() - 1 {
+                        self.o.write_all(b" ")?;
+                    }
                 }
 
                 writeln!(self.o, ";")?;

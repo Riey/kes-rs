@@ -39,19 +39,12 @@ impl<'s, 'i> Lexer<'s, 'i> {
     }
 
     fn skip_ws(&mut self) {
-        const LINE_COMMENT: u8 = b'#';
-
         let mut bytes = self.text.as_bytes().iter();
         while let Some(b) = bytes.next() {
             match b {
                 b' ' | b'\t' | b'\r' => {}
                 b'\n' => {
                     self.line += 1;
-                }
-                &LINE_COMMENT => {
-                    let slice = bytes.as_slice();
-                    let pos = memchr::memchr(b'\n', slice).unwrap_or(slice.len());
-                    bytes = unsafe { slice.get_unchecked(pos..) }.iter();
                 }
                 _ => {
                     self.text = unsafe {
@@ -300,24 +293,27 @@ fn lex_test() {
     assert_eq!(next!(), Token::StrLit(abc),);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@!  A 'ABC'", &mut interner);
+    ts = Lexer::new("@!  A 'ABC';", &mut interner);
     assert_eq!(next!(), Token::PrintWait,);
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
+    assert_eq!(next!(), Token::SemiColon,);
     assert!(ts.text.is_empty());
 
-    ts = Lexer::new("@#foo\n A 'ABC'", &mut interner);
+    ts = Lexer::new("@ A 'ABC';", &mut interner);
     assert_eq!(next!(), Token::PrintLine,);
     assert_eq!(next!(), Token::Builtin(a),);
     assert_eq!(next!(), Token::StrLit(abc),);
+    assert_eq!(next!(), Token::SemiColon,);
 
     let one = interner.get_or_intern("1");
 
-    ts = Lexer::new("$1 = 1 + 2", &mut interner);
+    ts = Lexer::new("$1 = 1 + 2;", &mut interner);
     assert_eq!(next!(), Token::Variable(one));
     assert_eq!(next!(), Token::Assign);
     assert_eq!(next!(), Token::IntLit(1));
     assert_eq!(next!(), Token::BinaryOp(BinaryOperator::Add));
     assert_eq!(next!(), Token::IntLit(2));
+    assert_eq!(next!(), Token::SemiColon,);
     assert!(ts.text.is_empty());
 }
