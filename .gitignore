@@ -2,4 +2,5 @@
 /flamegraph*
 /perf*
 /.idea
+/*.bench
 Cargo.lock

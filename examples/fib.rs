@@ -1,7 +1,7 @@
 use kes::async_trait;
 use kes::builtin::Builtin;
 use kes::context::Context;
-use kes::parser::parse;
+use kes::program::Program;
 use kes::value::Value;
 
 pub struct StdioBuiltin;
@@ -9,11 +9,7 @@ pub struct StdioBuiltin;
 #[async_trait]
 impl Builtin for StdioBuiltin {
     #[inline]
-    async fn run(&mut self, _name: &str, _ctx: &mut Context<'_>) -> Option<Value> {
-        unimplemented!();
-    }
-    #[inline]
-    fn load<'b>(&mut self, _name: &str) -> Value {
+    async fn run(&mut self, _name: &str, _ctx: &mut Context<'_>) -> Value {
         unimplemented!();
     }
     #[inline]
@@ -32,9 +28,9 @@ impl Builtin for StdioBuiltin {
 }
 
 fn main() {
-    let script = parse(include_str!("fib.kes")).unwrap();
+    let program = Program::from_source(include_str!("fib.kes")).unwrap();
 
-    let ctx = Context::new(&script);
+    let ctx = Context::new(&program);
 
-    futures::executor::block_on(ctx.run(StdioBuiltin)).unwrap();
+    futures_executor::block_on(ctx.run(StdioBuiltin)).unwrap();
 }

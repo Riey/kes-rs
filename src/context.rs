@@ -2,46 +2,46 @@ use crate::builtin::Builtin;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::instruction::Instruction;
 use crate::instruction::InstructionWithDebug;
-use crate::operator::Operator;
-use crate::value::Value;
-use crate::value::ValueConvertError;
+use crate::interner::Symbol;
+use crate::location::Location;
+use crate::operator::{BinaryOperator, TernaryOperator};
+use crate::program::Program;
+use crate::value::{Value, ValueConvertError};
 use ahash::AHashMap;
-use arrayvec::ArrayVec;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 
 static_assertions::assert_impl_all!(Context: Send, Sync);
 
 pub struct Context<'c> {
-    pub instructions: &'c [InstructionWithDebug<'c>],
-    pub stack: Vec<Vec<Value>>,
-    pub variables: AHashMap<&'c str, Value>,
+    program: &'c Program,
+    stack: Vec<Value>,
+    pub variables: AHashMap<Symbol, Value>,
     cursor: usize,
 }
 
 impl<'c> Context<'c> {
-    pub fn new(instructions: &'c [InstructionWithDebug<'c>]) -> Self {
+    pub fn new(program: &'c Program) -> Self {
         Self {
-            instructions,
+            program,
             stack: Vec::with_capacity(50),
             variables: AHashMap::new(),
             cursor: 0,
         }
     }
 
-    #[inline]
-    pub fn current_block(&mut self) -> &mut Vec<Value> {
-        self.stack.last_mut().unwrap()
+    pub fn args(&self) -> &[Value] {
+        &self.stack[..]
     }
 
     #[inline]
-    pub fn push(&mut self, v: impl Into<Value>) {
-        self.current_block().push(v.into());
+    fn push(&mut self, v: impl Into<Value>) {
+        self.stack.push(v.into());
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<Value> {
-        self.current_block().pop()
+    fn pop(&mut self) -> Option<Value> {
+        self.stack.pop()
     }
 
     #[inline]
@@ -49,7 +49,7 @@ impl<'c> Context<'c> {
     where
         T::Error: std::fmt::Debug,
     {
-        self.current_block().pop().unwrap().try_into().unwrap()
+        self.stack.pop().unwrap().try_into().unwrap()
     }
 
     #[inline]
@@ -59,13 +59,13 @@ impl<'c> Context<'c> {
         self.pop_ret()?
             .try_into()
             .map_err(|err: ValueConvertError| {
-                RuntimeError::TypeError(err.0, self.current_instruction_line_no())
+                RuntimeError::TypeError(err.0, self.current_instruction_location().line)
             })
     }
 
     #[inline]
     pub fn peek(&mut self) -> Option<&mut Value> {
-        self.current_block().last_mut()
+        self.stack.last_mut()
     }
 
     #[inline]
@@ -83,7 +83,7 @@ impl<'c> Context<'c> {
         self.pop_into()
     }
 
-    pub fn run_operator(&mut self, op: Operator) -> RuntimeResult<()> {
+    pub fn run_bin_operator(&mut self, op: BinaryOperator) -> RuntimeResult<()> {
         macro_rules! binop {
             ($op:tt) => {
                 let rhs: u32 = self.pop_into_ret()?;
@@ -117,39 +117,34 @@ impl<'c> Context<'c> {
         }
 
         match op {
-            Operator::Equal => {
+            BinaryOperator::Equal => {
                 binop_raw_bool!(==);
             }
-            Operator::NotEqual => {
+            BinaryOperator::NotEqual => {
                 binop_raw_bool!(!=);
             }
-            Operator::Greater => {
+            BinaryOperator::Greater => {
                 binop_raw_bool!(>);
             }
-            Operator::Less => {
+            BinaryOperator::Less => {
                 binop_raw_bool!(<);
             }
-            Operator::GreaterOrEqual => {
+            BinaryOperator::GreaterOrEqual => {
                 binop_raw_bool!(>=);
             }
-            Operator::LessOrEqual => {
+            BinaryOperator::LessOrEqual => {
                 binop_raw_bool!(<=);
             }
-            Operator::And => {
+            BinaryOperator::And => {
                 binop_bool!(&);
             }
-            Operator::Or => {
+            BinaryOperator::Or => {
                 binop_bool!(|);
             }
-            Operator::Xor => {
+            BinaryOperator::Xor => {
                 binop_bool!(^);
             }
-            Operator::Not => {
-                let b = self.pop_ret()?.into_bool();
-
-                self.push(if !b { 1 } else { 0 });
-            }
-            Operator::Add => {
+            BinaryOperator::Add => {
                 let rhs = self.pop_ret()?;
                 let lhs = self.pop_ret()?;
 
@@ -166,16 +161,16 @@ impl<'c> Context<'c> {
                     (Value::Str(l), Value::Str(r)) => Value::Str(l + &r),
                 });
             }
-            Operator::Sub => {
+            BinaryOperator::Sub => {
                 binop!(-);
             }
-            Operator::Mul => {
+            BinaryOperator::Mul => {
                 binop!(*);
             }
-            Operator::Div => {
+            BinaryOperator::Div => {
                 binop!(/);
             }
-            Operator::Rem => {
+            BinaryOperator::Rem => {
                 binop!(%);
             }
         }
@@ -184,7 +179,7 @@ impl<'c> Context<'c> {
     }
 
     pub fn flush_print<B: Builtin>(&mut self, builtin: &mut B) {
-        for v in self.current_block().drain(..) {
+        for v in self.stack.drain(..) {
             builtin.print(v);
         }
     }
@@ -198,45 +193,54 @@ impl<'c> Context<'c> {
         self.peek().ok_or(err)
     }
 
-    fn current_instruction_line_no(&self) -> usize {
-        self.instructions[self.cursor].line_no
+    fn current_instruction_location(&self) -> Location {
+        self.program.instructions()[self.cursor].location
     }
 
     fn make_err(&self, msg: &'static str) -> RuntimeError {
-        RuntimeError::ExecutionError(msg, self.current_instruction_line_no())
+        RuntimeError::ExecutionError(msg, self.current_instruction_location().line)
     }
 
     pub async fn run_instruction<B: Builtin>(
         &mut self,
         builtin: &mut B,
-        inst: InstructionWithDebug<'c>,
+        inst: InstructionWithDebug,
     ) -> RuntimeResult<()> {
         match inst.inst {
             Instruction::Exit => {
-                self.cursor = self.instructions.len();
+                self.cursor = self.program.instructions().len();
                 return Ok(());
             }
             Instruction::LoadInt(num) => self.push(num),
-            Instruction::LoadStr(str) => self.push(str),
+            Instruction::LoadStr(str) => self.push(self.program.resolve(str).unwrap()),
             Instruction::LoadVar(name) => {
-                let item = self.variables[name].clone();
+                let item = self
+                    .variables
+                    .get(&name)
+                    .ok_or(self.make_err("변수를 찾을수 없습니다"))?
+                    .clone();
                 self.push(item);
             }
             Instruction::StoreVar(name) => {
                 let item = self.pop_ret()?;
                 self.variables.insert(name, item);
             }
-            Instruction::LoadBuiltin(name) => {
-                self.push(builtin.load(name));
-            }
             Instruction::CallBuiltin(name) => {
-                let ret = builtin.run(name, self).await;
-                self.stack.pop();
-                if let Some(ret) = ret {
-                    self.push(ret);
-                }
+                let ret = builtin
+                    .run(
+                        self.program
+                            .resolve(name)
+                            .ok_or(self.make_err("알수없는 심볼입니다"))?,
+                        self,
+                    )
+                    .await;
+                self.push(ret);
             }
-            Instruction::Operator(op) => self.run_operator(op)?,
+            Instruction::BinaryOperator(op) => self.run_bin_operator(op)?,
+            Instruction::UnaryOperator(crate::operator::UnaryOperator::Not) => {
+                let v: bool = self.pop_ret()?.into_bool();
+                self.push(!v);
+            }
             Instruction::Goto(pos) => {
                 self.cursor = pos as usize;
                 return Ok(());
@@ -247,23 +251,16 @@ impl<'c> Context<'c> {
                     return Ok(());
                 }
             }
-            Instruction::StartBlock => {
-                self.stack.push(Vec::with_capacity(10));
-            }
-            Instruction::EndBlock => {
-                self.stack.pop();
-            }
-            Instruction::Print => {
+            Instruction::Print { newline, wait } => {
                 self.flush_print(builtin);
-            }
-            Instruction::PrintLine => {
-                self.flush_print(builtin);
-                builtin.new_line();
-            }
-            Instruction::PrintWait => {
-                self.flush_print(builtin);
-                builtin.new_line();
-                builtin.wait().await;
+
+                if newline || wait {
+                    builtin.new_line();
+                }
+
+                if wait {
+                    builtin.wait().await;
+                }
             }
             Instruction::Duplicate => {
                 let item = self.peek_ret()?.clone();
@@ -273,18 +270,7 @@ impl<'c> Context<'c> {
             Instruction::Pop => {
                 self.pop();
             }
-            Instruction::PopExternal(num) => {
-                let start = if num == 0 {
-                    0
-                } else {
-                    self.current_block().len() - num as usize
-                };
-
-                let buf: ArrayVec<[_; 20]> = self.current_block().drain(start..).collect();
-                let pos = self.stack.len() - 2;
-                self.stack[pos].extend(buf);
-            }
-            Instruction::Conditional => {
+            Instruction::TernaryOperator(TernaryOperator::Conditional) => {
                 let rhs = self.pop_ret()?;
                 let lhs = self.pop_ret()?;
                 let cond = self.pop_bool();
@@ -299,7 +285,7 @@ impl<'c> Context<'c> {
     }
 
     pub async fn run<B: Builtin>(mut self, mut builtin: B) -> RuntimeResult<()> {
-        while let Some(&instruction) = self.instructions.get(self.cursor) {
+        while let Some(&instruction) = self.program.instructions().get(self.cursor) {
             self.run_instruction(&mut builtin, instruction).await?;
         }
 
@@ -308,93 +294,59 @@ impl<'c> Context<'c> {
 }
 
 #[cfg(test)]
-fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
+mod tests {
+    use super::Context;
     use crate::builtin::RecordBuiltin;
-    use crate::parser::parse;
-
-    let instructions = parse(code).unwrap();
-
-    let mut builtin = RecordBuiltin::new();
-    let ctx = Context::new(&instructions);
-
-    futures::executor::block_on(ctx.run(&mut builtin))?;
-
-    Ok(builtin)
-}
-
-#[cfg(test)]
-fn try_test(code: &str, expected: &str) {
+    use crate::error::{RuntimeError, RuntimeResult};
+    use crate::program::Program;
     use pretty_assertions::assert_eq;
 
-    assert_eq!(test_impl(code).unwrap().text(), expected);
-}
+    fn test_impl(code: &str) -> RuntimeResult<crate::builtin::RecordBuiltin> {
+        let program = Program::from_source(code).unwrap();
+        let mut builtin = RecordBuiltin::new();
+        let ctx = Context::new(&program);
 
-#[test]
-fn error_line_no() {
-    let err = test_impl(
-        "
-    2 '2' +
-    ; 3번째줄
-    1 '1' - ;4번째줄
+        futures_executor::block_on(ctx.run(&mut builtin))?;
+
+        Ok(builtin)
+    }
+
+    #[cfg(test)]
+    fn try_test(code: &str, expected: &str) {
+        assert_eq!(test_impl(code).unwrap().text(), expected);
+    }
+
+    #[test]
+    fn error_line_no() {
+        let err = test_impl(
+            "
+    2 + '2';
+    # 3번째줄
+    1 - '1'; #4번째줄
     ",
-    )
-    .err()
-    .unwrap();
+        )
+        .err()
+        .unwrap();
 
-    match err {
-        RuntimeError::TypeError("str", 4) => {}
-        _ => panic!("unexpected error"),
+        match err {
+            RuntimeError::TypeError("str", 4) => {}
+            _ => panic!("unexpected error"),
+        }
     }
-}
 
-#[test]
-fn pop_external_test() {
-    try_test(
-        "
-만약 1 2 ~= {
-    2 3 [!]
-    4 5 [!1] #
-}
-@
-",
-        "4@#235@",
-    );
-}
-
-#[test]
-fn str_select_test() {
-    try_test(
-        "
-선택 '2' {
-    '1' {
-        3:
+    #[test]
+    fn if_test() {
+        try_test(
+            "만약 !1 { @'2'; } 그외 { @'3'; } 만약 0 { @'4'; } 그외 { @'5'; }",
+            "3@5@",
+        );
     }
-    '2' {
-        4:
+
+    #[test]
+    fn loop_test() {
+        try_test(
+            "$0 = 1; 반복 $0 < 10 { @@$0; $0 = $0 + 1; } @@$0;",
+            "12345678910",
+        );
     }
-    _ {
-        5:
-    }
-}
-",
-        "4",
-    );
-}
-
-#[test]
-fn if_test() {
-    try_test(
-        "만약 1 ~ { '2'@ } 그외 { '3'@ } 만약 0 { '3'@ } 그외 {  '4'@ }",
-        "3@4@",
-    );
-}
-
-#[test]
-fn loop_test() {
-    try_test("1 [$0] 반복 $0 10 < { $0: $0 1 + [$0] } $0:", "12345678910");
-}
-
-#[test]
-fn complex_test() {
-    try_test("1 2 + [$0] 만약 $0 3 = { 선택 $0 { 1 { 2: } 3 { '?': } _ { '1': } } } 그외 { 만약 3 { 4: } 만약 '1' { 1: } } $0:", "?3");
 }

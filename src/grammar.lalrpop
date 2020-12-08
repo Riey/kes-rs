@@ -1,0 +1,171 @@
+use crate::token::Token;
+use crate::ast::{Expr, Stmt};
+use crate::operator::{UnaryOperator, BinaryOperator, TernaryOperator};
+use crate::location::Location;
+use crate::error::LexicalError;
+use crate::interner::Symbol;
+
+grammar<'s>;
+
+pub Program: Vec<Stmt<'s>> = {
+    Body,
+};
+
+Body: Vec<Stmt<'s>> = {
+    <stmts: Stmt*> => stmts,
+}
+
+Stmt: Stmt<'s> = {
+    "종료" ";" => Stmt::Exit,
+    <location:@L> <var:var> "=" <value:Expr> ";" => Stmt::Assign { var, value, location },
+    <location:@L> "PRINT" <values:Expr*> ";" => Stmt::Print { values, newline: false, wait: false, location },
+    <location:@L> "PRINTL" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: false, location },
+    <location:@L> "PRINTW" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: true, location },
+    <location:@L> "만약" <cond:Expr> "{" <body:Body> "}" <elseifstmts:ElseIfStmt*> <elsestmt:ElseStmt?> => {
+        let mut arms = elseifstmts;
+        arms.insert(0, (cond, body));
+        Stmt::If {
+            arms,
+            other: elsestmt.unwrap_or_default(),
+            location,
+        }
+    },
+    <location:@L> "반복" <cond:Expr> "{" <body:Body> "}" => Stmt::While { cond, body, location },
+    <location:@L> <expr:Expr> ";" => Stmt::Expression { expr, location },
+    <comment> => Stmt::Comment(<>),
+    <Stmt> ";" => <>,
+}
+
+ElseIfStmt: (Expr, Vec<Stmt<'s>>) = {
+    "혹은" <cond:Expr> "{" <body:Body> "}" => (cond, body),
+}
+
+ElseStmt: Vec<Stmt<'s>> = {
+    "그외" "{" <body:Body> "}" => body,
+}
+
+Expr: Expr = {
+    <lhs:Expr> "?" <mhs:BoolExpr> ":" <rhs:BoolExpr> => lhs.ternary_op(mhs, rhs, TernaryOperator::Conditional),
+    BoolExpr,
+}
+
+BoolExpr: Expr = {
+    <lhs:BoolExpr> <op:BoolOp> <rhs:ArithmeticExpr> => lhs.binary_op(rhs, op),
+    ArithmeticExpr,
+}
+
+BoolOp: BinaryOperator = {
+    ">" => BinaryOperator::Greater,
+    ">=" => BinaryOperator::GreaterOrEqual,
+    "<" => BinaryOperator::Less,
+    "<=" => BinaryOperator::LessOrEqual,
+    "==" => BinaryOperator::Equal,
+    "!=" => BinaryOperator::NotEqual,
+    "&" => BinaryOperator::And,
+    "|" => BinaryOperator::Or,
+    "^" => BinaryOperator::Xor,
+}
+
+ArithmeticExpr: Expr = {
+    <lhs:ArithmeticExpr> <op:AddOp> <rhs:Factor> => lhs.binary_op(rhs, op),
+    Factor,
+}
+
+AddOp: BinaryOperator = {
+    "+" => BinaryOperator::Add,
+    "-" => BinaryOperator::Sub,
+}
+
+Factor: Expr = {
+    <lhs:Factor> <op:MulOp> <rhs:UnaryExpr> => lhs.binary_op(rhs, op),
+    UnaryExpr,
+}
+
+MulOp: BinaryOperator = {
+    "*" => BinaryOperator::Mul,
+    "/" => BinaryOperator::Div,
+    "%" => BinaryOperator::Rem,
+}
+
+UnaryExpr: Expr = {
+    <op:UnaryOp> <expr:CallExpr> => expr.unary_op(UnaryOperator::Not),
+    CallExpr,
+}
+
+UnaryOp: UnaryOperator = {
+    "!" => UnaryOperator::Not,
+}
+
+CallExpr: Expr = {
+    <name:built> <args:CallArgs> => Expr::BuiltinFunc { name, args },
+    Term,
+}
+
+#[inline]
+CallArgs: Vec<Expr> = {
+    "(" <Arg*> ")" => <>,
+}
+
+#[inline]
+Arg: Expr = {
+    <Expr> ","? => <>,
+}
+
+Term: Expr = {
+    <value:number> => Expr::Number(value),
+    <value:string> => Expr::String(value),
+    <name:var> => Expr::Variable(name),
+    "(" <Expr> ")",
+}
+
+extern {
+    type Location = Location;
+    type Error = LexicalError;
+
+    enum Token<'s> {
+        "만약" => Token::If,
+        "혹은" => Token::ElseIf,
+        "그외" => Token::Else,
+        "반복" => Token::While,
+        "종료" => Token::Exit,
+        "PRINT" => Token::Print,
+        "PRINTL" => Token::PrintLine,
+        "PRINTW" => Token::PrintWait,
+        "{" => Token::OpenBrace,
+        "}" => Token::CloseBrace,
+        "(" => Token::OpenParan,
+        ")" => Token::CloseParan,
+
+        "+" => Token::BinaryOp(BinaryOperator::Add),
+        "-" => Token::BinaryOp(BinaryOperator::Sub),
+
+        "*" => Token::BinaryOp(BinaryOperator::Mul),
+        "/" => Token::BinaryOp(BinaryOperator::Div),
+        "%" => Token::BinaryOp(BinaryOperator::Rem),
+
+        "&" => Token::BinaryOp(BinaryOperator::And),
+        "|" => Token::BinaryOp(BinaryOperator::Or),
+        "^" => Token::BinaryOp(BinaryOperator::Xor),
+
+        ">" => Token::BinaryOp(BinaryOperator::Greater),
+        ">=" => Token::BinaryOp(BinaryOperator::GreaterOrEqual),
+        "<" => Token::BinaryOp(BinaryOperator::Less),
+        "<=" => Token::BinaryOp(BinaryOperator::LessOrEqual),
+        "!=" => Token::BinaryOp(BinaryOperator::NotEqual),
+        "==" => Token::BinaryOp(BinaryOperator::Equal),
+
+        "?" => Token::TernaryOp(TernaryOperator::Conditional, true),
+        ":" => Token::TernaryOp(TernaryOperator::Conditional, false),
+
+        "!" => Token::UnaryOp(UnaryOperator::Not),
+        "=" => Token::Assign,
+        ";" => Token::SemiColon,
+        "," => Token::Comma,
+        comment => Token::Comment(<&'s str>),
+        built => Token::Builtin(<Symbol>),
+        number => Token::IntLit(<u32>),
+        string => Token::StrLit(<Symbol>),
+        var => Token::Variable(<Symbol>),
+    }
+} 
+

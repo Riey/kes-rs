@@ -1,43 +1,31 @@
-use crate::operator::Operator;
+use crate::{
+    interner::Symbol,
+    location::Location,
+    operator::{BinaryOperator, TernaryOperator, UnaryOperator},
+};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Instruction<'s> {
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Instruction {
     Nop,
     Exit,
     Pop,
-    PopExternal(u32),
     Duplicate,
-    Conditional,
     LoadInt(u32),
-    LoadStr(&'s str),
-    LoadVar(&'s str),
-    StoreVar(&'s str),
-    LoadBuiltin(&'s str),
-    CallBuiltin(&'s str),
-    Print,
-    PrintLine,
-    PrintWait,
-    Operator(Operator),
+    LoadStr(Symbol),
+    LoadVar(Symbol),
+    StoreVar(Symbol),
+    CallBuiltin(Symbol),
+    Print { newline: bool, wait: bool },
+    BinaryOperator(BinaryOperator),
+    UnaryOperator(UnaryOperator),
+    TernaryOperator(TernaryOperator),
     Goto(u32),
     GotoIfNot(u32),
-    StartBlock,
-    EndBlock,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct InstructionWithDebug<'s> {
-    pub inst: Instruction<'s>,
-    pub line_no: usize,
-}
-
-impl<'s> InstructionWithDebug<'s> {
-    pub fn new(inst: Instruction<'s>, line_no: usize) -> Self {
-        Self { inst, line_no }
-    }
-}
-
-impl<'s> PartialEq<Instruction<'s>> for InstructionWithDebug<'s> {
-    fn eq(&self, other: &Instruction<'s>) -> bool {
-        self.inst == *other
-    }
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct InstructionWithDebug {
+    pub inst: Instruction,
+    pub location: Location,
 }

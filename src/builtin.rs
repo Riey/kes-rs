@@ -4,8 +4,7 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait Builtin: Send {
-    async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Option<Value>;
-    fn load<'b>(&mut self, name: &str) -> Value;
+    async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Value;
     fn print(&mut self, v: Value);
     fn new_line(&mut self);
     async fn wait(&mut self);
@@ -14,12 +13,8 @@ pub trait Builtin: Send {
 #[async_trait]
 impl<'a, B: Builtin> Builtin for &'a mut B {
     #[inline]
-    async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Option<Value> {
+    async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Value {
         (**self).run(name, ctx).await
-    }
-    #[inline]
-    fn load<'b>(&mut self, name: &str) -> Value {
-        (**self).load(name)
     }
     #[inline]
     fn print(&mut self, v: Value) {
@@ -55,14 +50,8 @@ impl RecordBuiltin {
 #[async_trait]
 impl Builtin for RecordBuiltin {
     #[inline]
-    async fn run(&mut self, name: &str, _ctx: &mut Context<'_>) -> Option<Value> {
+    async fn run(&mut self, name: &str, _ctx: &mut Context<'_>) -> Value {
         self.0.push_str(name);
-        None
-    }
-    #[inline]
-    fn load<'b>(&mut self, name: &str) -> Value {
-        use std::fmt::Write;
-        write!(self.0, "${}", name).unwrap();
         Value::Int(0)
     }
     #[inline]

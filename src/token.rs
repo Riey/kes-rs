@@ -1,29 +1,39 @@
-use crate::operator::Operator;
+use crate::interner::Symbol;
+use crate::operator::{BinaryOperator, TernaryOperator, UnaryOperator};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Token<'s> {
+pub enum Token<'a> {
     /// 만약
     If,
     /// 혹은
     ElseIf,
     /// 그외
     Else,
-    /// 선택
-    Select,
     /// 종료
     Exit,
     /// 반복
-    Loop,
+    While,
     /// ''
-    StrLit(&'s str),
+    StrLit(Symbol),
     /// 123
     IntLit(u32),
     /// ABC
-    Builtin(&'s str),
+    Builtin(Symbol),
     /// $ABC
-    Variable(&'s str),
-    /// +-/*
-    Operator(Operator),
+    Variable(Symbol),
+
+    /// !
+    UnaryOp(UnaryOperator),
+
+    /// &
+    BinaryOp(BinaryOperator),
+
+    /// ? :
+    TernaryOp(TernaryOperator, bool),
+
+    /// \# Comment
+    Comment(&'a str),
+
     /// {
     OpenBrace,
     /// }
@@ -32,22 +42,20 @@ pub enum Token<'s> {
     OpenParan,
     /// )
     CloseParan,
-    /// :
-    Colon,
-    /// #
-    Sharp,
+
+    /// @@
+    Print,
+    /// @!
+    PrintWait,
     /// @
-    At,
-    /// \[$<>]
-    Assign(&'s str),
-    /// \[+]
-    Duplicate,
-    /// \[-]
-    Pop,
-    /// \[?]
-    Conditional,
-    /// \[!]
-    PopExternal(u32),
-    /// _
-    Underscore,
+    PrintLine,
+
+    /// ;
+    SemiColon,
+
+    /// ,
+    Comma,
+
+    /// =
+    Assign,
 }
