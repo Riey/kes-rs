@@ -342,6 +342,14 @@ mod tests {
     }
 
     #[test]
+    fn end_comment() {
+        assert_eq!(
+            format_code_to_string("$1=2;#12\n$2=3;").unwrap(),
+            "#12\n$1 = 2;\n$2 = 3;\n"
+        );
+    }
+
+    #[test]
     fn work() {
         let code = "$1=2;만약1+2{123;}@!456;";
         let formatted_code = format_code_to_string(code).unwrap();
