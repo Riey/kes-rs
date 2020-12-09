@@ -44,7 +44,22 @@ ElseStmt: Vec<Stmt> = {
 }
 
 Expr: Expr = {
-    <lhs:Expr> "?" <mhs:BoolExpr> ":" <rhs:BoolExpr> => lhs.ternary_op(mhs, rhs, TernaryOperator::Conditional),
+    <lhs:Expr> "?" <mhs:OrExpr> ":" <rhs:OrExpr> => lhs.ternary_op(mhs, rhs, TernaryOperator::Conditional),
+    OrExpr,
+}
+
+OrExpr: Expr = {
+    <lhs:OrExpr> "|" <rhs:XorExpr> => lhs.binary_op(rhs, BinaryOperator::Or),
+    XorExpr,
+}
+
+XorExpr: Expr = {
+    <lhs:XorExpr> "^" <rhs:AndExpr> => lhs.binary_op(rhs, BinaryOperator::Xor),
+    AndExpr,
+}
+
+AndExpr: Expr = {
+    <lhs:AndExpr> "&" <rhs:BoolExpr> => lhs.binary_op(rhs, BinaryOperator::And),
     BoolExpr,
 }
 
@@ -60,9 +75,6 @@ BoolOp: BinaryOperator = {
     "<=" => BinaryOperator::LessOrEqual,
     "==" => BinaryOperator::Equal,
     "!=" => BinaryOperator::NotEqual,
-    "&" => BinaryOperator::And,
-    "|" => BinaryOperator::Or,
-    "^" => BinaryOperator::Xor,
 }
 
 ArithmeticExpr: Expr = {

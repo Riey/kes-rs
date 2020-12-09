@@ -201,7 +201,7 @@ mod tests {
         let mut i = Interner::new();
         test_impl(
             "1 | 3 & 2;",
-                &mut i,
+            &mut i,
             &[
                 Instruction::LoadInt(1),
                 Instruction::LoadInt(3),
@@ -209,7 +209,7 @@ mod tests {
                 Instruction::BinaryOperator(BinaryOperator::And),
                 Instruction::BinaryOperator(BinaryOperator::Or),
                 Instruction::Pop,
-            ]
+            ],
         );
     }
 
