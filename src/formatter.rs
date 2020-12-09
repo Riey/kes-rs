@@ -175,12 +175,11 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
             let o = &mut self.o;
             let last_location = self.last_location;
             self.last_location = location;
-            // self.last_location = location.next_line();
             move |is_block: bool| -> io::Result<()> {
                 if is_block {
                     o.write_all(b"\n")?;
                 }
-                for (_, comment) in comments.range(last_location..=location) {
+                for (_, comment) in comments.range(last_location..location) {
                     writeln!(o, "#{}", comment)?;
                 }
                 Ok(())
@@ -346,7 +345,7 @@ mod tests {
     fn end_comment() {
         assert_eq!(
             format_code_to_string("$1=2;#12\n$2=3;").unwrap(),
-            "#12\n$1 = 2;\n$2 = 3;\n"
+            "$1 = 2;\n#12\n$2 = 3;\n"
         );
     }
 
