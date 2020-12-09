@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn simple() {
         assert_eq!(
-            format_code_to_string("#12\n$1=2;#123\n만약1+2{123;}@!456;").unwrap(),
+            format_code_to_string("#12\n$1=2;\n#123\n만약1+2{123;}@!456;").unwrap(),
             "#12\n$1 = 2;\n\n#123\n만약 1 + 2 {\n    123;\n}\n\n@!456;\n"
         );
     }
