@@ -1,3 +1,9 @@
+[workspace]
+members = [
+    ".",
+    "kesfmt",
+]
+
 [package]
 name = "kes"
 version = "0.16.0"
