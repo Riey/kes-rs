@@ -1,23 +1,19 @@
-use lalrpop_util::lalrpop_mod;
+//! kes implementation in Rust
+//! ## Examples
+//! ```rust
+//! use kes::builtin::RecordBuiltin;
+//! use kes::context::Context;
+//! use kes::program::Program;
+//! use futures_executor::block_on;
+//! let source = "$1 = 1 + 2; @$1;";
+//! let program = Program::from_source(source).unwrap();
+//! let mut builtin = RecordBuiltin::new();
+//! let mut ctx = Context::new(&program);
+//! block_on(ctx.run(&mut builtin)).unwrap();
+//! assert_eq!(builtin.text(), "3");
+//! ```
 
-/// kes implementation in Rust
-///
-/// ## Examples
-/// ```rust
-/// use kes::builtin::RecordBuiltin;
-/// use kes::context::Context;
-/// use kes::program::Program;
-/// use futures_executor::block_on;
-///
-/// let source = "$1 = 1 + 2; @$1;";
-///
-/// let program = Program::from_source(source).unwrap();
-/// let mut builtin = RecordBuiltin::new();
-/// let mut ctx = Context::new(&program);
-/// block_on(ctx.run(&mut builtin)).unwrap();
-///
-/// assert_eq!(builtin.text(), "3");
-/// ```
+use lalrpop_util::lalrpop_mod;
 
 pub mod ast;
 pub mod builtin;
