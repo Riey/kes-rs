@@ -110,7 +110,6 @@ impl<'s, 'i, C: CommentHandler<'s>> Lexer<'s, 'i, C> {
         LexicalError::InvalidChar(ch, self.location())
     }
 
-    #[inline]
     fn read_ident(&mut self) -> &'s str {
         let pos = self.text.find(is_not_ident_char).unwrap_or(self.text.len());
         unsafe {
@@ -120,7 +119,6 @@ impl<'s, 'i, C: CommentHandler<'s>> Lexer<'s, 'i, C> {
         }
     }
 
-    #[inline]
     fn try_read_ident(&mut self) -> Option<&'s str> {
         let ident = self.read_ident();
 
@@ -131,7 +129,6 @@ impl<'s, 'i, C: CommentHandler<'s>> Lexer<'s, 'i, C> {
         }
     }
 
-    #[inline]
     fn try_match_pop_byte(&mut self, match_byte: u8) -> bool {
         match self.text.as_bytes().get(0) {
             Some(b) if *b == match_byte => {
@@ -151,7 +148,6 @@ impl<'s, 'i, C: CommentHandler<'s>> Lexer<'s, 'i, C> {
         Ok(lit)
     }
 
-    #[inline]
     fn try_strip_prefix(&mut self, prefix: &str) -> bool {
         if self.text.starts_with(prefix) {
             self.text = unsafe { self.text.get_unchecked(prefix.len()..) };
