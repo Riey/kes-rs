@@ -219,7 +219,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                         write!(self.o, "만약")?;
                         first = false;
                     } else {
-                        write!(self.o, "혹은")?;
+                        write!(self.o, " 혹은")?;
                     }
                     writeln!(
                         self.o,
@@ -234,7 +234,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 }
 
                 if !other.is_empty() {
-                    writeln!(self.o, "그외 {{")?;
+                    writeln!(self.o, " 그외 {{")?;
                     self.write_stmt_block(other)?;
                     write!(self.o, "}}")?;
                 }
@@ -331,6 +331,14 @@ mod tests {
             format_code_to_string("#12\n$1=2;\n#123\n만약1+2{123;}@!456;").unwrap(),
             "#12\n$1 = 2;\n\n#123\n만약 1 + 2 {\n    123;\n}\n\n@!456;\n"
         );
+    }
+
+    #[test]
+    fn if_else() {
+        assert_eq!(
+            format_code_to_string("만약1{123;}혹은2{456;}그외{789;}").unwrap(),
+            "\n만약 1 {\n    123;\n} 혹은 2 {\n    456;\n} 그외 {\n    789;\n}\n\n",
+        )
     }
 
     #[test]
