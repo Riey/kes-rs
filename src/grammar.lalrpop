@@ -133,7 +133,7 @@ Term: Expr = {
     <value:number> => Expr::Number(value),
     <value:string> => Expr::String(value),
     <name:var> => Expr::Variable(name),
-    "(" <Expr> ")",
+    "(" <Expr> ")" => Expr::Nop(Box::new(<>)),
 }
 
 extern {

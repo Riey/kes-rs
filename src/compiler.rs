@@ -135,6 +135,9 @@ impl Compiler {
                 }
                 self.push(Instruction::CallBuiltin(*name));
             }
+            Expr::Nop(value) => {
+                self.push_expr(value);
+            }
             Expr::UnaryOp { value, op } => {
                 self.push_expr(value);
                 self.push(Instruction::UnaryOperator(*op));

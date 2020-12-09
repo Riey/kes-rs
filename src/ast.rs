@@ -66,6 +66,9 @@ pub enum Expr {
         name: Symbol,
         args: Vec<Expr>,
     },
+
+    Nop(Box<Expr>),
+
     UnaryOp {
         value: Box<Expr>,
         op: UnaryOperator,

@@ -106,6 +106,7 @@ impl<'a> fmt::Display for ExprDisplay<'a> {
 
                 write!(f, ")")
             }
+            Expr::Nop(value) => write!(f, "({})", self.display(value)),
             Expr::BinaryOp { lhs, rhs, op } => {
                 write!(
                     f,
@@ -378,6 +379,14 @@ mod tests {
         assert_eq!(
             format_code_to_string("$1=2;#12\n$2=3;").unwrap(),
             "$1 = 2;\n#12\n$2 = 3;\n"
+        );
+    }
+
+    #[test]
+    fn paren_test() {
+        assert_eq!(
+            format_code_to_string("1*(2+3);").unwrap(),
+            "1 * (2 + 3);\n"
         );
     }
 
