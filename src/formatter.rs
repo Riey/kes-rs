@@ -175,6 +175,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
             let o = &mut self.o;
             let last_location = self.last_location;
             self.last_location = location;
+            // self.last_location = location.next_line();
             move |is_block: bool| -> io::Result<()> {
                 if is_block {
                     o.write_all(b"\n")?;

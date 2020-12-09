@@ -10,6 +10,10 @@ impl Location {
     pub fn new(line: usize) -> Self {
         Self { line }
     }
+    pub fn next_line(mut self) -> Self {
+        self.line += 1;
+        self
+    }
 }
 
 impl fmt::Display for Location {
