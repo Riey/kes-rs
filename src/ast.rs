@@ -15,9 +15,9 @@ pub enum Stmt {
         location: Location,
     },
     If {
-        arms: Vec<(Expr, Vec<Stmt>)>,
+        arms: Vec<(Expr, Vec<Stmt>, Location)>,
         other: Vec<Stmt>,
-        location: Location,
+        other_location: Location,
     },
     While {
         cond: Expr,
@@ -38,10 +38,21 @@ impl Stmt {
         match self {
             Stmt::Assign { location, .. }
             | Stmt::Print { location, .. }
-            | Stmt::If { location, .. }
             | Stmt::While { location, .. }
             | Stmt::Expression { location, .. }
             | Stmt::Exit { location } => *location,
+            Stmt::If { arms, .. } => arms[0].2,
+        }
+    }
+
+    pub fn is_block(&self) -> bool {
+        match self {
+            Stmt::If { .. }
+            | Stmt::While { .. } => true,
+            Stmt::Assign { .. }
+            | Stmt::Print { .. }
+            | Stmt::Expression { .. }
+            | Stmt::Exit { .. } => false,
         }
     }
 }

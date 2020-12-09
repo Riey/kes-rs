@@ -23,11 +23,12 @@ Stmt: Stmt = {
     <location:@L> "PRINTW" <values:Expr*> ";" => Stmt::Print { values, newline: true, wait: true, location },
     <location:@L> "만약" <cond:Expr> "{" <body:Body> "}" <elseifstmts:ElseIfStmt*> <elsestmt:ElseStmt?> => {
         let mut arms = elseifstmts;
-        arms.insert(0, (cond, body));
+        arms.insert(0, (cond, body, location));
+        let other = elsestmt.unwrap_or_default();
         Stmt::If {
             arms,
-            other: elsestmt.unwrap_or_default(),
-            location,
+            other: other.0,
+            other_location: other.1,
         }
     },
     <location:@L> "반복" <cond:Expr> "{" <body:Body> "}" => Stmt::While { cond, body, location },
@@ -35,12 +36,12 @@ Stmt: Stmt = {
     <Stmt> ";" => <>,
 }
 
-ElseIfStmt: (Expr, Vec<Stmt>) = {
-    "혹은" <cond:Expr> "{" <body:Body> "}" => (cond, body),
+ElseIfStmt: (Expr, Vec<Stmt>, Location) = {
+    <location:@L> "혹은" <cond:Expr> "{" <body:Body> "}" => (cond, body, location),
 }
 
-ElseStmt: Vec<Stmt> = {
-    "그외" "{" <body:Body> "}" => body,
+ElseStmt: (Vec<Stmt>, Location) = {
+    <location:@L> "그외" "{" <body:Body> "}" => (body, location),
 }
 
 Expr: Expr = {

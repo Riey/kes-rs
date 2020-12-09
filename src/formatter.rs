@@ -159,32 +159,54 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
     }
 
     fn write_stmt_block(&mut self, block: &[Stmt]) -> io::Result<()> {
+        self.o.write_all(b"{\n")?;
         self.o.push_block();
         for stmt in block.iter() {
             self.write_stmt(stmt)?;
         }
         self.o.pop_block();
+        self.o.write_all(b"}")?;
 
         Ok(())
     }
 
-    pub fn write_stmt(&mut self, stmt: &Stmt) -> io::Result<()> {
-        let mut write_comments = {
-            let location = stmt.location();
-            let comments = self.comments;
-            let o = &mut self.o;
-            let last_location = self.last_location;
-            self.last_location = location;
-            move |is_block: bool| -> io::Result<()> {
-                if is_block {
-                    o.write_all(b"\n")?;
-                }
-                for (_, comment) in comments.range(last_location..location) {
-                    writeln!(o, "#{}", comment)?;
-                }
-                Ok(())
+    fn write_comment(&mut self, new_location: Location) -> io::Result<()> {
+        for (_, comment) in self.comments.range(self.last_location..new_location) {
+            writeln!(self.o, "#{}", comment)?;
+        }
+        self.last_location = new_location;
+        Ok(())
+    }
+
+    fn write_start_block_comment(&mut self, blank: bool, ident: &str, new_location: Location) -> io::Result<()> {
+        let mut comments = self.comments.range(self.last_location..new_location).peekable();
+
+        let has_comment = comments.peek().is_some();
+
+        if !has_comment {
+            if blank {
+                write!(self.o, " ")?;
             }
-        };
+            write!(self.o, "{} ", ident)?;
+        } else {
+            writeln!(self.o)?;
+            for (_, comment) in comments {
+                writeln!(self.o, "#{}", comment)?;
+            }
+            write!(self.o, "{} ", ident)?;
+        }
+
+        self.last_location = new_location;
+        Ok(())
+    }
+
+    pub fn write_stmt(&mut self, stmt: &Stmt) -> io::Result<()> {
+        {
+            if stmt.is_block() {
+                writeln!(self.o)?;
+            }
+            self.write_comment(stmt.location())?;
+        }
 
         let interner = self.interner;
 
@@ -196,7 +218,6 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
 
         match stmt {
             Stmt::Assign { var, value, .. } => {
-                write_comments(false)?;
                 writeln!(
                     self.o,
                     "${} = {};",
@@ -208,51 +229,46 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 )?;
             }
             Stmt::Exit { .. } => {
-                write_comments(false)?;
                 writeln!(self.o, "종료;")?;
             }
-            Stmt::If { arms, other, .. } => {
-                write_comments(true)?;
+            Stmt::If { arms, other, other_location } => {
                 let mut first = true;
-                for (cond, body) in arms.iter() {
+                for (cond, body, location) in arms.iter() {
                     if first {
-                        write!(self.o, "만약")?;
                         first = false;
+                        self.write_start_block_comment(false, "만약", *location)?;
                     } else {
-                        write!(self.o, " 혹은")?;
+                        self.write_start_block_comment(true, "혹은", *location)?;
                     }
-                    writeln!(
+                    write!(
                         self.o,
-                        " {} {{",
+                        "{} ",
                         ExprDisplay {
                             expr: cond,
                             interner
                         }
                     )?;
                     self.write_stmt_block(body)?;
-                    write!(self.o, "}}")?;
                 }
 
                 if !other.is_empty() {
-                    writeln!(self.o, " 그외 {{")?;
+                    self.write_start_block_comment(true, "그외", *other_location)?;
                     self.write_stmt_block(other)?;
-                    write!(self.o, "}}")?;
                 }
 
-                self.o.write_all(b"\n\n")?;
+                self.o.write_all(b"\n")?;
             }
             Stmt::While { cond, body, .. } => {
-                write_comments(true)?;
-                writeln!(
+                write!(
                     self.o,
-                    "반복 {} {{",
+                    "반복 {} ",
                     ExprDisplay {
                         expr: cond,
                         interner
                     }
                 )?;
                 self.write_stmt_block(body)?;
-                self.o.write_all(b"}\n\n")?;
+                self.o.write_all(b"\n")?;
             }
             Stmt::Print {
                 newline,
@@ -260,8 +276,6 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 values,
                 ..
             } => {
-                write_comments(false)?;
-
                 let prefix = if *wait {
                     "@!"
                 } else if *newline {
@@ -290,7 +304,6 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 writeln!(self.o, ";")?;
             }
             Stmt::Expression { expr, .. } => {
-                write_comments(false)?;
                 writeln!(self.o, "{};", ExprDisplay { expr, interner })?;
             }
         }
@@ -338,6 +351,25 @@ mod tests {
         assert_eq!(
             format_code_to_string("만약1{123;}혹은2{456;}그외{789;}").unwrap(),
             "\n만약 1 {\n    123;\n} 혹은 2 {\n    456;\n} 그외 {\n    789;\n}\n\n",
+        )
+    }
+
+    #[test]
+    fn if_else_comment() {
+        assert_eq!(
+            format_code_to_string("만약1{123;\n#comment\n#comment2\n}혹은2{456;}그외{789;}").unwrap(),
+"
+만약 1 {
+    123;
+}
+#comment
+#comment2
+혹은 2 {
+    456;
+} 그외 {
+    789;
+}
+",
         )
     }
 

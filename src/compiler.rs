@@ -71,13 +71,13 @@ impl Compiler {
             Stmt::If {
                 arms,
                 other,
-                location,
+                other_location,
             } => {
-                self.location = *location;
                 let mut mark = 0;
                 let mut else_mark = ArrayVec::<[_; 20]>::new();
 
-                for (idx, (cond, body)) in arms.iter().enumerate() {
+                for (idx, (cond, body, location)) in arms.iter().enumerate() {
+                    self.location = *location;
                     let first = idx == 0;
 
                     if !first {
@@ -95,6 +95,10 @@ impl Compiler {
 
                 if !arms.is_empty() {
                     self.out[mark as usize].inst = Instruction::GotoIfNot(self.next_pos() as u32);
+                }
+
+                if !other.is_empty() {
+                    self.location = *other_location;
                 }
 
                 self.compile_body(other);
