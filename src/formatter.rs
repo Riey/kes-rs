@@ -265,9 +265,9 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                 let prefix = if *wait {
                     "@!"
                 } else if *newline {
-                    "@"
-                } else {
                     "@@"
+                } else {
+                    "@"
                 };
 
                 self.o.write_all(prefix.as_bytes())?;
