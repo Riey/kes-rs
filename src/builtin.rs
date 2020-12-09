@@ -2,6 +2,7 @@ use crate::context::Context;
 use crate::value::Value;
 use async_trait::async_trait;
 
+/// Script Builtin trait you can provide your system methods for script
 #[async_trait]
 pub trait Builtin: Send {
     async fn run(&mut self, name: &str, ctx: &mut Context<'_>) -> Value;
@@ -37,10 +38,8 @@ impl<'a, B: Builtin> Builtin for &'a mut B {
     }
 }
 
-#[cfg(test)]
 pub struct RecordBuiltin(String);
 
-#[cfg(test)]
 impl RecordBuiltin {
     #[inline]
     pub fn new() -> Self {
@@ -53,7 +52,6 @@ impl RecordBuiltin {
     }
 }
 
-#[cfg(test)]
 #[async_trait]
 impl Builtin for RecordBuiltin {
     #[inline]

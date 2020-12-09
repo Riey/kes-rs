@@ -24,6 +24,7 @@ pub enum Instruction {
     GotoIfNot(u32),
 }
 
+/// Contains location from source
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct InstructionWithDebug {
     pub inst: Instruction,

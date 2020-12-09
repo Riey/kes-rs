@@ -179,8 +179,16 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
         Ok(())
     }
 
-    fn write_start_block_comment(&mut self, blank: bool, ident: &str, new_location: Location) -> io::Result<()> {
-        let mut comments = self.comments.range(self.last_location..new_location).peekable();
+    fn write_start_block_comment(
+        &mut self,
+        blank: bool,
+        ident: &str,
+        new_location: Location,
+    ) -> io::Result<()> {
+        let mut comments = self
+            .comments
+            .range(self.last_location..new_location)
+            .peekable();
 
         let has_comment = comments.peek().is_some();
 
@@ -232,7 +240,11 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
             Stmt::Exit { .. } => {
                 writeln!(self.o, "종료;")?;
             }
-            Stmt::If { arms, other, other_location } => {
+            Stmt::If {
+                arms,
+                other,
+                other_location,
+            } => {
                 let mut first = true;
                 for (cond, body, location) in arms.iter() {
                     if first {
@@ -257,7 +269,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                     self.write_stmt_block(other)?;
                 }
 
-                self.o.write_all(b"\n")?;
+                self.o.write_all(b"\n\n")?;
             }
             Stmt::While { cond, body, .. } => {
                 write!(
@@ -269,7 +281,7 @@ impl<'a, W: Write> CodeFormatter<'a, W> {
                     }
                 )?;
                 self.write_stmt_block(body)?;
-                self.o.write_all(b"\n")?;
+                self.o.write_all(b"\n\n")?;
             }
             Stmt::Print {
                 newline,
@@ -358,8 +370,9 @@ mod tests {
     #[test]
     fn if_else_comment() {
         assert_eq!(
-            format_code_to_string("만약1{123;\n#comment\n#comment2\n}혹은2{456;}그외{789;}").unwrap(),
-"
+            format_code_to_string("만약1{123;\n#comment\n#comment2\n}혹은2{456;}그외{789;}")
+                .unwrap(),
+            "
 만약 1 {
     123;
 }
@@ -370,6 +383,7 @@ mod tests {
 } 그외 {
     789;
 }
+
 ",
         )
     }
@@ -384,10 +398,7 @@ mod tests {
 
     #[test]
     fn paren_test() {
-        assert_eq!(
-            format_code_to_string("1*(2+3);").unwrap(),
-            "1 * (2 + 3);\n"
-        );
+        assert_eq!(format_code_to_string("1*(2+3);").unwrap(), "1 * (2 + 3);\n");
     }
 
     #[test]

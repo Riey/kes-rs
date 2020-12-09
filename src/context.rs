@@ -13,6 +13,9 @@ use std::fmt::Write;
 
 static_assertions::assert_impl_all!(Context: Send, Sync);
 
+/// Script Context type
+///
+/// you can run `Program` with `Builtin`
 pub struct Context<'c> {
     program: &'c Program,
     stack: Vec<Value>,

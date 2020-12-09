@@ -3,6 +3,7 @@ use crate::location::Location;
 use crate::{ast::Expr, ast::Stmt};
 use arrayvec::ArrayVec;
 
+/// Compile ast with instructions
 pub struct Compiler {
     out: Vec<InstructionWithDebug>,
     location: Location,

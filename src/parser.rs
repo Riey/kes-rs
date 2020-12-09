@@ -4,11 +4,13 @@ use crate::lexer::{IgnoreComment, Lexer, StoreComment};
 use crate::{ast::Stmt, location::Location};
 use std::collections::BTreeMap;
 
+/// Parse program from source
 pub fn parse(s: &str, interner: &mut Interner) -> Result<Vec<Stmt>, ParseError> {
     let lexer = Lexer::new(s, interner, IgnoreComment);
     crate::grammar::ProgramParser::new().parse(lexer)
 }
 
+/// Parse program from source with comments
 pub fn parse_with_comments<'s>(
     s: &'s str,
     interner: &mut Interner,

@@ -47,8 +47,7 @@ impl Stmt {
 
     pub fn is_block(&self) -> bool {
         match self {
-            Stmt::If { .. }
-            | Stmt::While { .. } => true,
+            Stmt::If { .. } | Stmt::While { .. } => true,
             Stmt::Assign { .. }
             | Stmt::Print { .. }
             | Stmt::Expression { .. }
