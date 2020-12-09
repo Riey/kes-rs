@@ -197,6 +197,23 @@ mod tests {
     }
 
     #[test]
+    fn and_or() {
+        let mut i = Interner::new();
+        test_impl(
+            "1 | 3 & 2;",
+                &mut i,
+            &[
+                Instruction::LoadInt(1),
+                Instruction::LoadInt(3),
+                Instruction::LoadInt(2),
+                Instruction::BinaryOperator(BinaryOperator::And),
+                Instruction::BinaryOperator(BinaryOperator::Or),
+                Instruction::Pop,
+            ]
+        );
+    }
+
+    #[test]
     fn print() {
         let mut i = Interner::new();
         let foo = i.get_or_intern_static("123");
